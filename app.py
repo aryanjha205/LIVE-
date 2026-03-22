@@ -190,11 +190,21 @@ def index():
 @app.route('/api/channels')
 def get_channels():
     try:
-        response = requests.get(PLAYLIST_URL, timeout=10)
+        # Increase timeout for IPTV-org list as it can be large/slow
+        response = requests.get(PLAYLIST_URL, timeout=20)
+        if not response.ok:
+            return jsonify({"error": f"IPTV provider error: {response.status_code}"}), 502
+            
         channels = parse_m3u(response.text)
+        
+        # If no channels found, return a minimal set to avoid empty screen
+        if not channels:
+            return jsonify([{"name": "No Channels Found", "group": "Info", "url": "", "logo": ""}])
+            
         return jsonify(channels)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"FETCH ERROR: {e}")
+        return jsonify({"error": f"Failed to load IPTV list: {str(e)}"}), 500
 
 @app.route('/service-worker.js')
 def sw():

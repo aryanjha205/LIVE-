@@ -41,15 +41,26 @@ async function init() {
 }
 
 async function fetchChannels() {
+    console.log("Fetching channels...");
     try {
         const response = await fetch('/api/channels');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
         channels = await response.json();
+        console.log(`Loaded ${channels.length} channels.`);
+        
+        if (channels.length === 0) {
+            showToast('No channels available', 'info');
+        }
+        
         renderHome();
         renderExplore();
         renderFavorites();
     } catch (error) {
-        console.error('Error fetching channels:', error);
-        showToast('Error loading streams', 'error');
+        console.error('Channel Fetch ERROR:', error);
+        showToast('Stream Server Unreachable', 'error');
+        // Clear skeletons to show error
+        featuredGrid.innerHTML = `<div class="p-10 text-center opacity-30 col-span-full">Failed to load channels. Check your connection.</div>`;
     }
 }
 
@@ -191,10 +202,17 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
+    if (!featuredGrid) return;
     featuredGrid.innerHTML = '';
+    
+    if (channels.length === 0) {
+        featuredGrid.innerHTML = '<div class="col-span-full text-center py-20 opacity-20 text-lg">Loading failed. Refresh app.</div>';
+        return;
+    }
+
     channels.slice(0, 12).forEach(c => {
         const card = document.createElement('div');
-        card.className = 'glass p-5 rounded-[25px] flex items-center space-x-4 active:scale-95 transition-all shadow-lg hover:bg-white/5';
+        card.className = 'glass p-5 rounded-[25px] flex items-center space-x-4 active:scale-95 transition-all shadow-lg hover:bg-white/5 border border-white/5';
         card.innerHTML = `
             <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
             <div class="flex flex-col min-w-0 flex-grow">

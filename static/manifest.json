@@ -1,11 +1,13 @@
 {
-  "name": "Live+",
+  "name": "LivePlus Premium",
   "short_name": "Live+",
-  "description": "Premium IPTV Stream Player",
+  "description": "High-Definition IPTV streaming at your fingertips. Full-screen, PiP, and personalized profiles.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#000000",
-  "theme_color": "#3b82f6",
+  "theme_color": "#0080ff",
   "icons": [
     {
       "src": "/static/icon-192.png",
@@ -17,5 +19,24 @@
       "sizes": "512x512",
       "type": "image/png"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Desktop Stream View"
+    },
+    {
+      "src": "/static/screenshot-mobile.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "Mobile Player Interface"
+    }
+  ],
+  "categories": [
+    "entertainment",
+    "video"
   ]
 }
