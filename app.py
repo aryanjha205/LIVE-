@@ -4,8 +4,10 @@ import re
 import os
 import random
 import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pymongo import MongoClient
-from flask_mail import Mail, Message
 from dotenv import load_dotenv
 
 # Load local .env if present
@@ -36,17 +38,11 @@ else:
         print(f"DATABASE CONNECTION ERROR: {e}")
         db = None
 
-# Email Setup
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
-raw_password = os.getenv("MAIL_PASSWORD", "")
-app.config['MAIL_PASSWORD'] = "".join(raw_password.split()) 
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
-
-mail = Mail(app)
+# Email Setup Variables from Env
+MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
+MAIL_SERVER = 'smtp.gmail.com'
+MAIL_PORT = 587
 
 PLAYLIST_URL = "https://iptv-org.github.io/iptv/index.m3u"
 
@@ -78,26 +74,54 @@ def parse_m3u(file_content):
 
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
-    if not db: return jsonify({"error": "Configuration Error: MONGO_URI missing on Vercel"}), 503
-    if not os.getenv("MAIL_USERNAME"): return jsonify({"error": "Configuration Error: MAIL_USERNAME missing"}), 503
-    
-    email = request.json.get('email', '').strip().lower()
-    if not email: return jsonify({"error": "Email is required"}), 400
-    
-    otp = str(random.randint(100000, 999999))
-    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
-    
-    otps_col.update_one({"_id": email}, {"$set": {"otp": otp, "expires_at": expires_at}}, upsert=True)
-    
     try:
-        msg = Message("Verification Code: " + otp, recipients=[email])
-        msg.body = f"Your verification code for Live+ is: {otp}"
-        msg.html = render_template('otp_email.html', otp=otp)
-        mail.send(msg)
-        return jsonify({"message": "OTP sent successfully"})
+        if not db: return jsonify({"error": "Config Error: MONGO_URI missing on Vercel"}), 503
+        if not MAIL_USERNAME: return jsonify({"error": "Config Error: MAIL_USERNAME missing"}), 503
+        
+        email = request.json.get('email', '').strip().lower()
+        if not email: return jsonify({"error": "Email is required"}), 400
+        
+        otp = str(random.randint(100000, 999999))
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
+        
+        otps_col.update_one({"_id": email}, {"$set": {"otp": otp, "expires_at": expires_at}}, upsert=True)
+        
+        # Using smtplib directly for stability in serverless environments
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = MAIL_USERNAME
+            msg['To'] = email
+            msg['Subject'] = f"Verification Code: {otp}"
+            
+            body = f"Your Live+ code: {otp}"
+            html = render_template('otp_email.html', otp=otp)
+            
+            msg.attach(MIMEText(body, 'plain'))
+            msg.attach(MIMEText(html, 'html'))
+            
+            server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
+            server.set_debuglevel(1)
+            server.starttls()
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            
+            return jsonify({"message": "OTP sent successfully"})
+        except Exception as e:
+            print(f"SMTP ERROR: {e}")
+            return jsonify({"error": f"Mail failed: {str(e)}"}), 500
+            
     except Exception as e:
-        print(f"MAIL ERROR: {str(e)}")
-        return jsonify({"error": "Email service error. Check Vercel logs.", "details": str(e)}), 500
+        print(f"GENERAL ERROR in send_otp: {e}")
+        return jsonify({"error": f"General Error: {str(e)}"}), 500
+
+@app.errorhandler(500)
+def handle_500(e):
+    return jsonify({"error": f"System 500 Error: {str(e)}"}), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({"error": f"Unhandled Exception: {str(e)}"}), 500
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():
