@@ -4,13 +4,19 @@ lucide.createIcons();
 const video = document.getElementById('video');
 const playerView = document.getElementById('player-view');
 const libHeader = document.getElementById('lib-header');
-const bottomNav = document.getElementById('bottom-nav');
 const featuredGrid = document.getElementById('featured-grid');
 const allChannelsList = document.getElementById('all-channels-list');
 const favoritesList = document.getElementById('favorites-list');
 const searchResults = document.getElementById('search-results');
 const globalSearch = document.getElementById('global-search');
 const searchModal = document.getElementById('search-modal');
+
+// Auth elements
+const authOverlay = document.getElementById('auth-overlay');
+const authEmail = document.getElementById('auth-email');
+const otpInput = document.getElementById('otp-input');
+const authStep1 = document.getElementById('auth-step-1');
+const authStep2 = document.getElementById('auth-step-2');
 
 let channels = [];
 let hls = null;
@@ -21,7 +27,18 @@ let controlsTimeout;
 let startY = 0;
 let isRightSide = false;
 
+// User state
+let currentUser = JSON.parse(localStorage.getItem('user')) || null;
+
 // --- INITIALIZATION ---
+
+async function init() {
+    if (currentUser) {
+        authOverlay.classList.add('hidden');
+        updateUIWithUser();
+        fetchChannels();
+    }
+}
 
 async function fetchChannels() {
     try {
@@ -32,27 +49,141 @@ async function fetchChannels() {
         renderFavorites();
     } catch (error) {
         console.error('Error fetching channels:', error);
-        showToast('Error loading channels', 'error');
+        showToast('Error loading streams', 'error');
     }
 }
 
+// --- AUTH LOGIC ---
+
+async function sendOTP() {
+    const email = authEmail.value;
+    if (!email || !email.includes('@')) return showToast("Enter a valid email");
+    
+    document.getElementById('send-otp-btn').innerText = "Sending...";
+    try {
+        const res = await fetch('/api/auth/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        authStep1.classList.add('hidden');
+        authStep2.classList.remove('hidden');
+        showToast("OTP sent to your email");
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        document.getElementById('send-otp-btn').innerText = "Continue";
+    }
+}
+
+async function verifyOTP() {
+    const email = authEmail.value;
+    const otp = otpInput.value;
+    if (otp.length !== 6) return showToast("Enter 6-digit OTP");
+    
+    document.getElementById('verify-otp-btn').innerText = "Verifying...";
+    try {
+        const res = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        currentUser = data.user;
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        authOverlay.classList.add('hidden');
+        updateUIWithUser();
+        fetchChannels();
+        showToast("Welcome to Live+!");
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        document.getElementById('verify-otp-btn').innerText = "Verify & Login";
+    }
+}
+
+function backToEmail() {
+    authStep2.classList.add('hidden');
+    authStep1.classList.remove('hidden');
+}
+
+function updateUIWithUser() {
+    if (!currentUser) return;
+    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
+    document.getElementById('user-name-display').innerText = currentUser.name;
+    document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
+    document.getElementById('user-avatar-small').src = currentUser.avatar;
+    document.getElementById('user-avatar-large').src = currentUser.avatar;
+    document.getElementById('edit-name').value = currentUser.name;
+    document.getElementById('edit-bio').value = currentUser.bio || "";
+}
+
+function logout() {
+    localStorage.removeItem('user');
+    location.reload();
+}
+
+// --- PROFILE LOGIC ---
+
+function toggleEditProfile() {
+    document.getElementById('edit-profile-form').classList.toggle('hidden');
+}
+
+async function saveProfile() {
+    const name = document.getElementById('edit-name').value;
+    const bio = document.getElementById('edit-bio').value;
+    
+    try {
+        const res = await fetch('/api/profile/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                email: currentUser.email,
+                name: name,
+                bio: bio,
+                avatar: currentUser.avatar
+            })
+        });
+        currentUser.name = name;
+        currentUser.bio = bio;
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        updateUIWithUser();
+        toggleEditProfile();
+        showToast("Profile Updated!");
+    } catch (err) {
+        showToast("Update failed");
+    }
+}
+
+function changeAvatar() {
+    const newAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`;
+    currentUser.avatar = newAvatar;
+    saveProfile();
+}
+
+// --- RENDERING ---
+
 function renderHome() {
-    // Featured are just first few for now
     featuredGrid.innerHTML = '';
-    channels.slice(0, 10).forEach(channel => {
+    channels.slice(0, 12).forEach(c => {
         const card = document.createElement('div');
-        card.className = 'glass p-4 rounded-2xl flex items-center space-x-4 active:scale-95 transition-all';
+        card.className = 'glass p-5 rounded-[25px] flex items-center space-x-4 active:scale-95 transition-all shadow-lg hover:bg-white/5';
         card.innerHTML = `
-            <img src="${channel.logo}" class="w-12 h-12 rounded-xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
+            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-sm truncate">${channel.name}</span>
-                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-wider">${channel.group}</span>
+                <span class="font-black text-sm truncate uppercase tracking-tight">${c.name}</span>
+                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px]">${c.group}</span>
             </div>
-            <button onclick="toggleFavorite(event, '${channel.name}')" class="p-2 text-white/20 hover:text-red-500 transition">
-                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(channel.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            <button onclick="toggleFavorite(event, '${c.name}')" class="p-3 text-white/20">
+                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
             </button>
         `;
-        card.onclick = () => openPlayer(channel);
+        card.onclick = () => openPlayer(c);
         featuredGrid.appendChild(card);
     });
     lucide.createIcons();
@@ -60,18 +191,18 @@ function renderHome() {
 
 function renderExplore(list = channels) {
     allChannelsList.innerHTML = '';
-    list.slice(0, 100).forEach(channel => {
+    list.slice(0, 50).forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-4 rounded-2xl flex items-center space-x-4 active:scale-95 transition-all';
+        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition';
         item.innerHTML = `
-            <img src="${channel.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
+            <img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover" onerror="this.src='/static/icon-192.png'">
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-sm truncate">${channel.name}</span>
-                <span class="text-[10px] text-white/30 uppercase">${channel.group}</span>
+                <span class="font-bold text-base truncate">${c.name}</span>
+                <span class="text-[10px] text-white/20 uppercase font-black tracking-widest">${c.group}</span>
             </div>
-            <i data-lucide="play" class="w-4 h-4 text-blue-500"></i>
+            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center"><i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i></div>
         `;
-        item.onclick = () => openPlayer(channel);
+        item.onclick = () => openPlayer(c);
         allChannelsList.appendChild(item);
     });
     lucide.createIcons();
@@ -82,25 +213,16 @@ function renderExplore(list = channels) {
 function openPlayer(channel) {
     playerView.style.display = 'block';
     document.getElementById('player-channel-name').textContent = channel.name;
-    
     if (Hls.isSupported()) {
         if (hls) hls.destroy();
         hls = new Hls();
         hls.loadSource(channel.url);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            video.play();
-            updatePlayIcon(true);
-        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play(); updatePlayIcon(true); });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = channel.url;
-        video.onloadedmetadata = () => {
-            video.play();
-            updatePlayIcon(true);
-        };
+        video.onloadedmetadata = () => { video.play(); updatePlayIcon(true); };
     }
-    
-    showToast(`Streaming ${channel.name}`);
     resetControlsTimer();
 }
 
@@ -108,8 +230,6 @@ function exitPlayer() {
     playerView.style.display = 'none';
     video.pause();
     if (hls) hls.destroy();
-    hls = null;
-    document.exitFullscreen().catch(() => {});
 }
 
 function togglePlay() {
@@ -125,174 +245,75 @@ function updatePlayIcon(isPlaying) {
 
 function toggleLock() {
     isLocked = !isLocked;
-    const icon = document.getElementById('lock-icon');
-    icon.setAttribute('data-lucide', isLocked ? 'lock' : 'unlock');
+    document.getElementById('lock-icon').setAttribute('data-lucide', isLocked ? 'lock' : 'unlock');
     document.getElementById('lock-overlay').classList.toggle('active', isLocked);
     document.getElementById('controls').style.opacity = isLocked ? '0' : '1';
     lucide.createIcons();
 }
 
 function onLockedScreenTouched() {
-    const toast = document.getElementById('lock-toast');
-    toast.style.opacity = '1';
-    setTimeout(() => toast.style.opacity = '0', 2000);
+    showToast("Screen Locked. Unlock to control.");
 }
 
 function toggleAspectRatio() {
     const modes = ['fit', 'fill', 'stretch'];
-    const nextIndex = (modes.indexOf(currentAspectRatio) + 1) % modes.length;
-    currentAspectRatio = modes[nextIndex];
+    currentAspectRatio = modes[(modes.indexOf(currentAspectRatio) + 1) % modes.length];
     video.className = currentAspectRatio;
-    showToast(`Mode: ${currentAspectRatio.toUpperCase()}`);
 }
 
-function toggleRotate() {
-    rotation = (rotation + 90) % 360;
-    video.style.transform = `rotate(${rotation}deg)`;
-    if (rotation === 90 || rotation === 270) {
-        video.style.width = '100vh';
-        video.style.height = '100vw';
-    } else {
-        video.style.width = '100%';
-        video.style.height = '100%';
-    }
-}
+function toggleRotate() { rotation = (rotation + 90) % 360; video.style.transform = `rotate(${rotation}deg)`; }
 
 // --- GESTURES ---
 
 playerView.addEventListener('touchstart', (e) => {
     if (isLocked) return;
     startY = e.touches[0].clientY;
-    const x = e.touches[0].clientX;
-    isRightSide = x > window.innerWidth / 2;
+    isRightSide = e.touches[0].clientX > window.innerWidth / 2;
     resetControlsTimer();
 });
 
 playerView.addEventListener('touchmove', (e) => {
     if (isLocked) return;
-    const currentY = e.touches[0].clientY;
-    const diff = startY - currentY;
-    
+    const dy = (startY - e.touches[0].clientY) / 200;
     if (isRightSide) {
-        updateIndicator('volume', diff / 200);
+        video.volume = Math.max(0, Math.min(1, video.volume + dy));
+        document.getElementById('vol-bar').style.height = `${video.volume * 100}%`;
+        document.getElementById('volume-v').style.opacity = '1';
     } else {
-        updateIndicator('brightness', diff / 200);
+        let br = parseFloat(video.style.filter.replace('brightness(', '').replace(')', '')) || 1;
+        br = Math.max(0.2, Math.min(1.5, br + dy));
+        video.style.filter = `brightness(${br})`;
+        document.getElementById('br-bar').style.height = `${(br / 1.5) * 100}%`;
+        document.getElementById('brightness-v').style.opacity = '1';
     }
-    startY = currentY;
+    startY = e.touches[0].clientY;
     e.preventDefault();
 }, { passive: false });
 
-function updateIndicator(type, delta) {
-    const indicator = document.getElementById(`${type}-v`);
-    const bar = document.getElementById(type === 'volume' ? 'vol-bar' : 'br-bar');
-    
-    if (type === 'volume') {
-        video.volume = Math.max(0, Math.min(1, video.volume + delta));
-        bar.style.height = `${video.volume * 100}%`;
-    } else {
-        // Brightness simulation
-        let br = parseFloat(video.style.filter.replace('brightness(', '').replace(')', '')) || 1;
-        br = Math.max(0.2, Math.min(1.5, br + delta));
-        video.style.filter = `brightness(${br})`;
-        bar.style.height = `${(br / 1.5) * 100}%`;
-    }
-    
-    indicator.style.opacity = '1';
-    clearTimeout(indicator.to);
-    indicator.to = setTimeout(() => indicator.style.opacity = '0', 1000);
-}
+playerView.addEventListener('touchend', () => {
+    setTimeout(() => {
+        document.getElementById('volume-v').style.opacity = '0';
+        document.getElementById('brightness-v').style.opacity = '0';
+    }, 800);
+});
 
-// --- PAGE NAVIGATION ---
+// --- NAVIGATION ---
 
 function switchPage(pageId) {
     const pages = ['home', 'explore', 'favorites', 'settings'];
     pages.forEach(p => {
-        const pageEl = document.getElementById(`page-${p}`);
-        const navEl = document.getElementById(`nav-${p}`);
-        
+        const el = document.getElementById(`page-${p}`);
+        const nav = document.getElementById(`nav-${p}`);
         if (p === pageId) {
-            pageEl.classList.remove('hidden-left', 'hidden-right');
-            pageEl.style.display = 'block'; // Ensure visibility
-            navEl.classList.add('active');
+            el.classList.remove('hidden-left', 'hidden-right');
+            el.style.display = 'block';
+            nav.classList.add('active');
         } else {
-            pageEl.classList.add(pages.indexOf(p) < pages.indexOf(pageId) ? 'hidden-left' : 'hidden-right');
-            navEl.classList.remove('active');
+            el.classList.add(pages.indexOf(p) < pages.indexOf(pageId) ? 'hidden-left' : 'hidden-right');
+            nav.classList.remove('active');
         }
     });
 }
-
-// --- CHANNEL UTILS ---
-
-function filterByGroup(group) {
-    // UI update for chips
-    document.querySelectorAll('.chip').forEach(c => {
-        c.classList.toggle('active', c.textContent.includes(group));
-    });
-
-    switchPage('explore'); // Switch to search/library view
-
-    if (group === 'All') {
-        renderExplore(channels);
-    } else {
-        const filtered = channels.filter(c => 
-            c.group.toLowerCase().includes(group.toLowerCase()) || 
-            c.name.toLowerCase().includes(group.toLowerCase())
-        );
-        renderExplore(filtered);
-    }
-}
-
-// --- FAVORITES ---
-
-function toggleFavorite(e, name) {
-    e.stopPropagation();
-    let favs = JSON.parse(localStorage.getItem('favs') || '[]');
-    if (favs.includes(name)) {
-        favs = favs.filter(f => f !== name);
-    } else {
-        favs.push(name);
-    }
-    localStorage.setItem('favs', JSON.stringify(favs));
-    renderHome();
-    renderFavorites();
-}
-
-function isFavorite(name) {
-    const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-    return favs.includes(name);
-}
-
-function renderFavorites() {
-    const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-    const favChannels = channels.filter(c => favs.includes(c.name));
-    
-    if (favChannels.length === 0) {
-        favoritesList.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-20 text-white/30 space-y-4">
-                <i data-lucide="heart" class="w-16 h-16 opacity-10"></i>
-                <p>No favorites yet</p>
-            </div>
-        `;
-    } else {
-        favoritesList.innerHTML = '';
-        favChannels.forEach(channel => {
-            const item = document.createElement('div');
-            item.className = 'glass p-4 rounded-2xl flex items-center space-x-4';
-            item.innerHTML = `
-                <img src="${channel.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
-                <div class="flex flex-col flex-grow">
-                    <span class="font-bold text-sm">${channel.name}</span>
-                </div>
-                <button onclick="toggleFavorite(event, '${channel.name}')" class="text-red-500"><i data-lucide="heart" class="fill-red-500 w-5 h-5"></i></button>
-            `;
-            item.onclick = () => openPlayer(channel);
-            favoritesList.appendChild(item);
-        });
-    }
-    lucide.createIcons();
-}
-
-// --- SEARCH ---
 
 function toggleSearch() {
     searchModal.classList.toggle('hidden');
@@ -302,81 +323,84 @@ function toggleSearch() {
 
 globalSearch.oninput = (e) => {
     const q = e.target.value.toLowerCase();
-    const results = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 20);
+    const res = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 30);
     searchResults.innerHTML = '';
-    results.forEach(c => {
+    res.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-4 rounded-2xl flex items-center space-x-4';
-        item.innerHTML = `
-            <img src="${c.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
-            <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-sm truncate">${c.name}</span>
-            </div>
-        `;
+        item.className = 'glass p-5 rounded-3xl flex items-center space-x-4 active:scale-95 transition';
+        item.innerHTML = `<img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover"><span class="font-bold">${c.name}</span>`;
         item.onclick = () => { openPlayer(c); toggleSearch(); };
         searchResults.appendChild(item);
     });
 };
 
-// --- MISC ---
+function filterByGroup(group) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent.includes(group)));
+    switchPage('explore');
+    renderExplore(group === 'All' ? channels : channels.filter(c => c.group.includes(group) || c.name.includes(group)));
+}
+
+// --- FAVORITES ---
+
+function toggleFavorite(e, name) {
+    e.stopPropagation();
+    let favs = JSON.parse(localStorage.getItem('favs') || '[]');
+    favs = favs.includes(name) ? favs.filter(f => f !== name) : [...favs, name];
+    localStorage.setItem('favs', JSON.stringify(favs));
+    renderHome();
+    renderFavorites();
+}
+
+function isFavorite(name) { return (JSON.parse(localStorage.getItem('favs') || '[]')).includes(name); }
+
+function renderFavorites() {
+    const favs = JSON.parse(localStorage.getItem('favs') || '[]');
+    const list = channels.filter(c => favs.includes(c.name));
+    favoritesList.innerHTML = list.length === 0 ? '<p class="text-center py-20 opacity-20">Empty Library</p>' : '';
+    list.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4';
+        item.innerHTML = `<img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover"><div class="flex-grow font-bold">${c.name}</div><i data-lucide="heart" class="fill-red-500 text-red-500 w-5 h-5"></i>`;
+        item.onclick = () => openPlayer(c);
+        favoritesList.appendChild(item);
+    });
+    lucide.createIcons();
+}
+
+function showToast(msg, type='info') {
+    const t = document.getElementById('global-toast');
+    t.innerText = msg;
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 3000);
+}
 
 function resetControlsTimer() {
-    const ctrl = document.getElementById('controls');
-    ctrl.style.opacity = '1';
+    const c = document.getElementById('controls');
+    c.style.opacity = '1';
     clearTimeout(controlsTimeout);
-    controlsTimeout = setTimeout(() => {
-        if (!video.paused && !isLocked) ctrl.style.opacity = '0';
-    }, 4000);
+    controlsTimeout = setTimeout(() => { if (!video.paused && !isLocked) c.style.opacity = '0'; }, 4000);
 }
 
-function showToast(msg) {
-    const t = document.getElementById('global-toast');
-    t.textContent = msg;
-    t.style.opacity = '1';
-    t.style.transform = 'translate(-50%, 20px)';
-    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translate(-50%, 0)'; }, 2000);
-}
+function skip(s) { video.currentTime += s; showToast(`Skipped ${s}s`); }
+function toggleFullScreen() { document.fullscreenElement ? document.exitFullscreen() : playerView.requestFullscreen(); }
 
-// Aspect Ratio Helper
-function toggleFullScreen() {
-    if (!document.fullscreenElement) {
-        playerView.requestFullscreen();
-    } else {
-        document.exitFullscreen();
+// --- AUTO ROTATION FULLSCREEN ---
+function handleRotation() {
+    if (playerView.style.display === 'block') {
+        const isLandscape = window.innerWidth > window.innerHeight;
+        if (isLandscape && !document.fullscreenElement) {
+            playerView.requestFullscreen().catch(err => console.log("Fullscreen blocked"));
+        }
     }
 }
 
-function skip(s) {
-    video.currentTime += s;
-    showToast(`${s > 0 ? '+' : ''}${s}s`);
+window.addEventListener('resize', handleRotation);
+if (screen.orientation) {
+    screen.orientation.addEventListener('change', handleRotation);
 }
-
-// Bindings
-document.getElementById('play-pause-btn').onclick = togglePlay;
-video.onclick = resetControlsTimer;
 
 // Init
-fetchChannels();
-switchPage('home');
-
-// --- PWA INSTALLATION ---
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    document.getElementById('install-banner').classList.remove('hidden');
-});
-
-document.getElementById('install-btn').onclick = async () => {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            document.getElementById('install-banner').classList.add('hidden');
-        }
-        deferredPrompt = null;
-    }
-};
+init();
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js');
