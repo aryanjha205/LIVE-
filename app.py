@@ -30,13 +30,15 @@ else:
         # User selection timeout helps identify connection issues immediately
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         db = client['live_plus']
-        users_col = db['users']
-        otps_col = db['otps']
         # Preliminary check
         client.admin.command('ping')
     except Exception as e:
         print(f"DATABASE CONNECTION ERROR: {e}")
         db = None
+
+# Define collections safely
+users_col = db['users'] if db is not None else None
+otps_col = db['otps'] if db is not None else None
 
 # Email Setup Variables from Env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -125,40 +127,45 @@ def handle_exception(e):
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():
-    if db is None: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
-    email = request.json.get('email', '').strip().lower()
-    otp = request.json.get('otp', '').strip()
-    
-    stored = otps_col.find_one({"_id": email})
-    if not stored or stored['otp'] != otp:
-        return jsonify({"error": "Invalid or expired OTP"}), 400
-    
-    if stored['expires_at'] < datetime.datetime.utcnow():
-        return jsonify({"error": "OTP expired"}), 400
-    
-    user = users_col.find_one({"_id": email})
-    if not user:
-        user = {
-            "_id": email,
-            "name": email.split('@')[0],
-            "bio": "Watching Live+",
-            "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=" + email,
-            "favs": [],
-            "created_at": datetime.datetime.utcnow()
-        }
-        users_col.insert_one(user)
-    
-    otps_col.delete_one({"_id": email})
-    
-    return jsonify({
-        "message": "Login successful",
-        "user": {
-            "name": user['name'],
-            "email": user['_id'],
-            "bio": user.get('bio', ''),
-            "avatar": user.get('avatar', '')
-        }
-    })
+    try:
+        if db is None: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
+        email = request.json.get('email', '').strip().lower()
+        otp = request.json.get('otp', '').strip()
+        
+        stored = otps_col.find_one({"_id": email})
+        if not stored or str(stored.get('otp')) != otp:
+             return jsonify({"error": "Invalid or expired OTP"}), 400
+        
+        # Ensure UTC comparison
+        if stored.get('expires_at') < datetime.datetime.utcnow():
+            return jsonify({"error": "OTP expired"}), 400
+        
+        user = users_col.find_one({"_id": email})
+        if not user:
+            user = {
+                "_id": email,
+                "name": email.split('@')[0],
+                "bio": "Watching Live+",
+                "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={email}",
+                "favs": [],
+                "created_at": datetime.datetime.utcnow()
+            }
+            users_col.insert_one(user)
+        
+        otps_col.delete_one({"_id": email})
+        
+        return jsonify({
+            "message": "Login successful",
+            "user": {
+                "name": user.get('name', 'User'),
+                "email": user.get('_id', email),
+                "bio": user.get('bio', ''),
+                "avatar": user.get('avatar', f"https://api.dicebear.com/7.x/avataaars/svg?seed={email}")
+            }
+        })
+    except Exception as e:
+        print(f"VERIFY OTP ERROR: {e}")
+        return jsonify({"error": f"Verification Crash: {str(e)}"}), 500
 
 @app.route('/api/profile/update', methods=['POST'])
 def update_profile():
