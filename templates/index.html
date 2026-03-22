@@ -19,13 +19,16 @@
         :root {
             --primary: #3b82f6;
             --accent: #22d3ee;
-            --bg: #0a0a0b;
-            --surface: #121214;
+            --bg: #000000;
+            --surface: #0a0a0b;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
         }
 
         * {
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            scrollbar-width: none;
         }
 
         body {
@@ -35,206 +38,332 @@
             overflow: hidden;
             height: 100vh;
             width: 100vw;
-        }
-
-        h1, h2, h3 {
-            font-family: 'Outfit', sans-serif;
-        }
-
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .mx-gradient {
-            background: linear-gradient(135deg, var(--primary), var(--accent));
-        }
-
-        /* Video Player Styles */
-        #player-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background: black;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        .controls-overlay {
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent 20%, transparent 80%, rgba(0,0,0,0.6));
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-            z-index: 10;
         }
 
-        .controls-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
+        h1, h2, h3 { font-family: 'Outfit', sans-serif; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .slider-v {
-            writing-mode: bt-lr; /* IE */
-            -webkit-appearance: slider-vertical; /* WebKit */
-            appearance: slider-vertical;
-            width: 8px;
-            height: 100px;
+        .mx-gradient { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+
+        /* Animation */
+        .page-transition {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
         }
 
-        .channel-list {
-            transition: transform 0.3s ease-in-out;
-            z-index: 50;
+        .hidden-left { transform: translateX(-100%); opacity: 0; }
+        .hidden-right { transform: translateX(100%); opacity: 0; }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            padding-bottom: var(--safe-bottom);
+            height: calc(70px + var(--safe-bottom));
         }
 
-        .channel-list.closed {
-            transform: translateX(-100%);
+        .nav-item.active {
+            color: var(--primary);
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 4px;
+        .nav-item.active i {
+            transform: translateY(-4px);
+            filter: drop-shadow(0 0 8px var(--primary));
         }
-        ::-webkit-scrollbar-track {
+
+        .nav-item i { transition: all 0.3s ease; }
+
+        /* Player Overlay */
+        .player-fullscreen {
+            position: fixed;
+            inset: 0;
+            background: black;
+            z-index: 100;
+            display: none; /* Toggle visibility */
+        }
+
+        .lock-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 150;
             background: transparent;
         }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.2);
-            border-radius: 10px;
+
+        .lock-overlay.active { display: block; }
+
+        /* Category Chips */
+        .chip {
+            padding: 8px 18px;
+            border-radius: 99px;
+            background: rgba(255,255,255,0.05);
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+        .chip.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
-        /* Ripple Effect */
-        .ripple {
-            position: absolute;
-            background: rgba(255,255,255,0.3);
-            border-radius: 50%;
-            transform: scale(0);
-            animation: ripple 0.6s linear;
-            pointer-events: none;
-        }
+        /* Aspect Ratio */
+        video.fit { object-fit: contain; }
+        video.fill { object-fit: cover; }
+        video.stretch { object-fit: fill; }
 
-        @keyframes ripple {
-            to {
-                transform: scale(4);
-                opacity: 0;
-            }
+        /* Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, #121214 25%, #1a1a1c 50%, #121214 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
     </style>
 </head>
-<body class="flex flex-col h-screen">
+<body class="bg-black text-white selection:bg-blue-500/30">
 
-    <!-- Loading Screen -->
-    <div id="loading" class="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center space-y-4">
-        <div class="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-        <h2 class="text-xl font-bold tracking-wider text-blue-500">LIVE+</h2>
-    </div>
+    <!-- App Header (Library View) -->
+    <header id="lib-header" class="px-6 pt-[var(--safe-top)] pb-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-md z-40">
+        <div class="flex items-center space-x-2">
+            <div class="w-8 h-8 mx-gradient rounded-lg flex items-center justify-center">
+                <i data-lucide="play" class="w-4 h-4 fill-white text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">Live<span class="text-blue-500">+</span></h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button onclick="toggleSearch()" class="p-2.5 rounded-full glass hover:bg-white/10">
+                <i data-lucide="search" class="w-5 h-5"></i>
+            </button>
+            <div class="w-10 h-10 rounded-full border-2 border-blue-500/30 p-0.5 overflow-hidden">
+                <img src="/static/icon-192.png" class="w-full h-full rounded-full" alt="User">
+            </div>
+        </div>
+    </header>
 
-    <!-- Main Player View -->
-    <div id="player-container" class="flex-grow overflow-hidden group">
-        <video id="video" playsinline></video>
+    <!-- Main Content Area -->
+    <main class="flex-grow overflow-hidden relative">
+        
+        <!-- Home Page -->
+        <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-8">
+            <!-- Hero Card -->
+            <div class="relative w-full aspect-[16/9] rounded-3xl overflow-hidden glass group">
+                <img src="https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&q=80" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" alt="Hero">
+                <div class="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
+                    <span class="px-3 py-1 rounded-full bg-red-600 text-[10px] font-bold tracking-widest uppercase mb-2 inline-block">Featured</span>
+                    <h2 class="text-2xl font-bold mb-1">Global TV Hub</h2>
+                    <p class="text-white/60 text-sm">Stream over 500+ free channels worldwide.</p>
+                </div>
+            </div>
 
-        <!-- Controls UI -->
-        <div id="controls" class="controls-overlay p-4">
-            <!-- Top Bar -->
-            <div class="flex items-center justify-between">
+            <!-- Categories -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Categories</h3>
+                    <button class="text-blue-500 text-sm font-medium">See all</button>
+                </div>
+                <div id="cat-scroll" class="flex space-x-3 overflow-x-auto pb-2 scroll-smooth">
+                    <div class="chip active" onclick="filterByGroup('All')">All Channels</div>
+                    <div class="chip" onclick="filterByGroup('News')">News</div>
+                    <div class="chip" onclick="filterByGroup('Sports')">Sports</div>
+                    <div class="chip" onclick="filterByGroup('Music')">Music</div>
+                    <div class="chip" onclick="filterByGroup('Movies')">Movies</div>
+                </div>
+            </div>
+
+            <!-- Recently Played / Featured List -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-semibold">Live Now</h3>
+                <div id="featured-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Skeleton -->
+                    <div class="skeleton w-full h-24 rounded-2xl"></div>
+                    <div class="skeleton w-full h-24 rounded-2xl"></div>
+                    <div class="skeleton w-full h-24 rounded-2xl"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Explore Page -->
+        <div id="page-explore" class="page-transition absolute inset-0 overflow-y-auto hidden-right px-6 pb-24 space-y-6">
+            <h2 class="text-2xl font-bold pt-4">Explore</h2>
+            <div id="all-channels-list" class="space-y-3">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Favorites Page -->
+        <div id="page-favorites" class="page-transition absolute inset-0 overflow-y-auto hidden-right px-6 pb-24 space-y-4">
+            <h2 class="text-2xl font-bold pt-4">My Library</h2>
+            <div id="favorites-list" class="space-y-3">
+                <div class="flex flex-col items-center justify-center py-20 text-white/30 space-y-4">
+                    <i data-lucide="heart" class="w-16 h-16 opacity-10"></i>
+                    <p>No favorites yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="page-settings" class="page-transition absolute inset-0 overflow-y-auto hidden-right px-6 pb-24 space-y-6">
+            <h2 class="text-2xl font-bold pt-4">Settings</h2>
+                <div id="install-banner" class="p-4 glass rounded-2xl flex items-center justify-between border-blue-500/20 bg-blue-500/5 hidden">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="download" class="w-5 h-5 text-blue-400"></i>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold">Install Live+</span>
+                            <span class="text-[10px] text-white/40">Add to home screen for better experience</span>
+                        </div>
+                    </div>
+                    <button id="install-btn" class="px-4 py-2 bg-blue-600 rounded-xl font-bold text-xs active:scale-95 transition">Install</button>
+                </div>
+                <div class="p-4 glass rounded-2xl flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="monitor" class="w-5 h-5 text-blue-500"></i>
+                        <span>Default Orientation</span>
+                    </div>
+                    <span class="text-xs text-white/40">Auto</span>
+                </div>
+                <div class="p-4 glass rounded-2xl flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="zap" class="w-5 h-5 text-yellow-500"></i>
+                        <span>High Quality Stream</span>
+                    </div>
+                    <input type="checkbox" checked class="accent-blue-500">
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav border-t border-white/5 glass flex justify-around items-center px-4 fixed bottom-0 w-full z-40">
+        <button onclick="switchPage('home')" id="nav-home" class="nav-item active flex flex-col items-center space-y-1">
+            <i data-lucide="home" class="w-6 h-6"></i>
+            <span class="text-[10px] font-medium">Home</span>
+        </button>
+        <button onclick="switchPage('explore')" id="nav-explore" class="nav-item flex flex-col items-center space-y-1">
+            <i data-lucide="layout-grid" class="w-6 h-6"></i>
+            <span class="text-[10px] font-medium">Explore</span>
+        </button>
+        <button onclick="switchPage('favorites')" id="nav-favorites" class="nav-item flex flex-col items-center space-y-1">
+            <i data-lucide="heart" class="w-6 h-6"></i>
+            <span class="text-[10px] font-medium">Library</span>
+        </button>
+        <button onclick="switchPage('settings')" id="nav-settings" class="nav-item flex flex-col items-center space-y-1">
+            <i data-lucide="settings" class="w-6 h-6"></i>
+            <span class="text-[10px] font-medium">Settings</span>
+        </button>
+    </nav>
+
+    <!-- Fullscreen Player View -->
+    <div id="player-view" class="player-fullscreen">
+        <video id="video" class="fit" playsinline></video>
+
+        <!-- Lock Control Layer -->
+        <div id="lock-overlay" class="lock-overlay" onclick="onLockedScreenTouched()"></div>
+
+        <!-- Video Controls Layer -->
+        <div id="controls" class="absolute inset-0 z-[110] flex flex-col justify-between p-4 bg-gradient-to-b from-black/60 via-transparent to-black/80 transition-all duration-300">
+            <!-- Player Top -->
+            <div class="flex items-center justify-between pt-[var(--safe-top)]">
                 <div class="flex items-center space-x-3">
-                    <button id="menu-btn" class="p-2 rounded-full hover:bg-white/10 transition">
-                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    <button onclick="exitPlayer()" class="p-3 rounded-full hover:bg-white/10 transition">
+                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
                     </button>
                     <div class="flex flex-col">
-                        <span id="current-channel-name" class="text-lg font-semibold truncate max-w-[200px] md:max-w-md">No Channel Selected</span>
-                        <span class="text-xs text-blue-400 font-medium">LIVE STREAM</span>
+                        <span id="player-channel-name" class="font-bold text-lg leading-none">Channel Link</span>
+                        <span class="text-blue-500 text-[10px] font-bold flex items-center"><span class="w-1 h-1 bg-red-500 rounded-full mr-1.5 animate-pulse"></span>LIVE STREAM</span>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="toggleRotate()" class="p-3 rounded-full hover:bg-white/10 transition">
-                        <i data-lucide="rotate-cw" class="w-5 h-5 text-white/80"></i>
+                    <button id="pip-btn" onclick="togglePiP()" class="p-3 rounded-full hover:bg-white/10 transition">
+                        <i data-lucide="picture-in-picture-2" class="w-5 h-5"></i>
                     </button>
-                    <button onclick="togglePiP()" class="p-3 rounded-full hover:bg-white/10 transition">
-                        <i data-lucide="picture-in-picture-2" class="w-5 h-5 text-white/80"></i>
-                    </button>
-                    <button onclick="toggleFullScreen()" class="p-3 rounded-full hover:bg-white/10 transition">
-                        <i data-lucide="maximize" class="w-5 h-5 text-white/80" id="fs-icon"></i>
+                    <button id="lock-btn" onclick="toggleLock()" class="p-3 rounded-full hover:bg-white/10 transition">
+                        <i data-lucide="unlock" class="w-5 h-5" id="lock-icon"></i>
                     </button>
                 </div>
             </div>
 
-            <!-- Center Controls -->
-            <div class="flex items-center justify-center space-x-8 md:space-x-16">
-                <button onclick="skip(-10)" class="p-4 rounded-full hover:bg-white/10 transition">
-                    <i data-lucide="rotate-ccw" class="w-8 h-8 md:w-10 md:h-10"></i>
+            <!-- Player Center -->
+            <div class="flex items-center justify-center space-x-12">
+                <button onclick="skip(-10)" class="p-4 rounded-full active:bg-white/10">
+                    <i data-lucide="rotate-ccw" class="w-10 h-10"></i>
                 </button>
-                <button id="play-pause-btn" class="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center rounded-full bg-blue-600 shadow-xl shadow-blue-500/20 hover:scale-105 transition-all active:scale-95">
-                    <i data-lucide="play" class="w-8 h-8 md:w-10 md:h-10 fill-white" id="main-play-icon"></i>
-                </button>
-                <button onclick="skip(10)" class="p-4 rounded-full hover:bg-white/10 transition">
-                    <i data-lucide="rotate-cw" class="w-8 h-8 md:w-10 md:h-10"></i>
+                <div id="play-pause-btn" class="w-20 h-20 rounded-full mx-gradient flex items-center justify-center shadow-2xl shadow-blue-500/20 active:scale-95 transition-transform">
+                    <i data-lucide="play" class="w-10 h-10 fill-white" id="p-icon"></i>
+                </div>
+                <button onclick="skip(10)" class="p-4 rounded-full active:bg-white/10">
+                    <i data-lucide="rotate-cw" class="w-10 h-10"></i>
                 </button>
             </div>
 
-            <!-- Bottom Bar -->
-            <div class="space-y-4">
-                <!-- Volume & Brightness Vertical Indicators (On Sides) -->
-                <div class="flex justify-between items-end absolute inset-x-4 bottom-24 pointer-events-none">
-                    <div id="brightness-indicator" class="flex flex-col items-center space-y-2 opacity-0 transition-opacity">
-                        <div class="w-1.5 h-32 bg-white/20 rounded-full overflow-hidden relative">
-                            <div id="brightness-bar" class="absolute bottom-0 w-full bg-white transition-all" style="height: 100%;"></div>
-                        </div>
-                        <i data-lucide="sun" class="w-4 h-4"></i>
+            <!-- Player Bottom -->
+            <div class="space-y-4 pb-[var(--safe-bottom)]">
+                <div class="flex items-end justify-between px-2">
+                    <div class="flex items-center space-x-6">
+                        <button onclick="toggleAspectRatio()" class="flex flex-col items-center space-y-1">
+                            <i data-lucide="screen-share" class="w-5 h-5 text-white/60"></i>
+                            <span class="text-[8px] font-bold text-white/40 uppercase">Ratio</span>
+                        </button>
+                        <button onclick="toggleRotate()" class="flex flex-col items-center space-y-1">
+                            <i data-lucide="rotate-cw" class="w-5 h-5 text-white/60"></i>
+                            <span class="text-[8px] font-bold text-white/40 uppercase">Rotate</span>
+                        </button>
                     </div>
-                    <div id="volume-indicator" class="flex flex-col items-center space-y-2 opacity-0 transition-opacity">
-                        <div class="w-1.5 h-32 bg-white/20 rounded-full overflow-hidden relative">
-                            <div id="volume-bar" class="absolute bottom-0 w-full bg-blue-500 transition-all" style="height: 80%;"></div>
-                        </div>
-                        <i data-lucide="volume-2" class="w-4 h-4"></i>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="toggleFullScreen()" class="p-2">
+                            <i data-lucide="maximize" class="w-6 h-6 text-white/80"></i>
+                        </button>
                     </div>
                 </div>
-
-                <!-- Seek Bar (Simulated for Live) -->
-                <div class="relative w-full h-1 bg-white/20 rounded-full group/seek cursor-pointer overflow-hidden">
-                    <div class="absolute left-0 top-0 h-full bg-blue-600 w-full opacity-60"></div>
+                <!-- Progress Line (Decorative for Live) -->
+                <div class="relative w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div class="absolute inset-y-0 left-0 bg-blue-500 w-full opacity-30"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Indicators -->
+        <div id="brightness-v" class="absolute left-8 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-4 opacity-0 transition-opacity">
+            <div class="w-1.5 h-32 bg-white/20 rounded-full overflow-hidden relative">
+                <div id="br-bar" class="absolute bottom-0 w-full bg-white" style="height: 50%;"></div>
+            </div>
+            <i data-lucide="sun" class="w-4 h-4 text-white"></i>
+        </div>
+        <div id="volume-v" class="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-4 opacity-0 transition-opacity">
+            <div class="w-1.5 h-32 bg-white/20 rounded-full overflow-hidden relative">
+                <div id="vol-bar" class="absolute bottom-0 w-full bg-blue-500" style="height: 80%;"></div>
+            </div>
+            <i data-lucide="volume-2" class="w-4 h-4 text-white"></i>
+        </div>
+
+        <!-- Locked Toast -->
+        <div id="lock-toast" class="absolute bottom-24 left-1/2 -translate-x-1/2 px-6 py-2 glass rounded-full text-sm font-medium opacity-0 transition-opacity">
+            Screen Locked. Tap unlock to use controls.
         </div>
     </div>
 
-    <!-- Side Menu / Channel List -->
-    <div id="sidebar" class="channel-list closed fixed inset-y-0 left-0 w-full max-w-[320px] glass flex flex-col">
-        <div class="p-6 border-b border-white/10 flex items-center justify-between">
-            <h2 class="text-2xl font-bold italic tracking-tighter text-blue-500">LIVE+</h2>
-            <button id="close-menu" class="p-2 rounded-full hover:bg-white/10">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
+    <!-- Global Search Modal -->
+    <div id="search-modal" class="fixed inset-0 bg-black/90 z-[1000] p-6 hidden flex-col">
+        <div class="flex items-center space-x-4 mb-8">
+            <button onclick="toggleSearch()" class="p-2 rounded-full glass"><i data-lucide="arrow-left" class="w-6 h-6"></i></button>
+            <input type="text" id="global-search" placeholder="Search for channels..." class="flex-grow bg-white/5 border border-white/10 rounded-2xl py-3 px-6 focus:outline-none focus:border-blue-500 transition-all">
         </div>
-        
-        <!-- Search -->
-        <div class="p-4">
-            <div class="relative">
-                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"></i>
-                <input type="text" id="search-input" placeholder="Search channels..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-all">
-            </div>
-        </div>
-
-        <!-- Channels Grid -->
-        <div id="channels-container" class="flex-grow overflow-y-auto p-4 space-y-2">
-            <!-- Channels will be injected here -->
+        <div id="search-results" class="flex-grow overflow-y-auto space-y-4">
+            <!-- Search Results -->
         </div>
     </div>
 
-    <!-- Toast UI -->
-    <div id="toast" class="fixed top-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-blue-600/90 text-white font-medium text-sm glass opacity-0 transition-all z-[200] pointer-events-none">
+    <!-- Notification Toast -->
+    <div id="global-toast" class="fixed top-8 left-1/2 -translate-x-1/2 px-6 py-3 glass mx-gradient rounded-full text-sm font-bold z-[2000] opacity-0 transition-all pointer-events-none">
         Channel Loaded
     </div>
 

@@ -2,25 +2,24 @@
 lucide.createIcons();
 
 const video = document.getElementById('video');
-const playPauseBtn = document.getElementById('play-pause-btn');
-const playIcon = document.getElementById('main-play-icon');
-const controls = document.getElementById('controls');
-const menuBtn = document.getElementById('menu-btn');
-const closeBtn = document.getElementById('close-menu');
-const sidebar = document.getElementById('sidebar');
-const channelsContainer = document.getElementById('channels-container');
-const playerContainer = document.getElementById('player-container');
-const searchInput = document.getElementById('search-input');
-const loading = document.getElementById('loading');
-const currentChannelName = document.getElementById('current-channel-name');
+const playerView = document.getElementById('player-view');
+const libHeader = document.getElementById('lib-header');
+const bottomNav = document.getElementById('bottom-nav');
+const featuredGrid = document.getElementById('featured-grid');
+const allChannelsList = document.getElementById('all-channels-list');
+const favoritesList = document.getElementById('favorites-list');
+const searchResults = document.getElementById('search-results');
+const globalSearch = document.getElementById('global-search');
+const searchModal = document.getElementById('search-modal');
 
 let channels = [];
-let filteredChannels = [];
 let hls = null;
+let isLocked = false;
+let currentAspectRatio = 'fit';
+let rotation = 0;
 let controlsTimeout;
 let startY = 0;
 let isRightSide = false;
-let currentVolume = 1;
 
 // --- INITIALIZATION ---
 
@@ -28,39 +27,62 @@ async function fetchChannels() {
     try {
         const response = await fetch('/api/channels');
         channels = await response.json();
-        filteredChannels = [...channels];
-        renderChannels();
-        loading.classList.add('hidden');
+        renderHome();
+        renderExplore();
+        renderFavorites();
     } catch (error) {
         console.error('Error fetching channels:', error);
         showToast('Error loading channels', 'error');
     }
 }
 
-function renderChannels(list = filteredChannels) {
-    channelsContainer.innerHTML = '';
-    list.forEach((channel, index) => {
-        const item = document.createElement('div');
-        item.className = 'group relative flex items-center space-x-4 p-3 rounded-2xl hover:bg-white/10 cursor-pointer transition-all active:scale-95';
-        item.innerHTML = `
-            <div class="relative w-12 h-12 flex-shrink-0">
-                <img src="${channel.logo}" class="w-full h-full object-cover rounded-xl border border-white/5" alt="${channel.name}" onerror="this.src='https://via.placeholder.com/150?text=TV'">
-                <div class="absolute inset-0 bg-blue-600/20 rounded-xl group-hover:opacity-100 opacity-0 transition"></div>
+function renderHome() {
+    // Featured are just first few for now
+    featuredGrid.innerHTML = '';
+    channels.slice(0, 10).forEach(channel => {
+        const card = document.createElement('div');
+        card.className = 'glass p-4 rounded-2xl flex items-center space-x-4 active:scale-95 transition-all';
+        card.innerHTML = `
+            <img src="${channel.logo}" class="w-12 h-12 rounded-xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
+            <div class="flex flex-col min-w-0 flex-grow">
+                <span class="font-bold text-sm truncate">${channel.name}</span>
+                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-wider">${channel.group}</span>
             </div>
-            <div class="flex flex-col min-w-0">
-                <span class="text-sm font-semibold truncate leading-tight">${channel.name}</span>
-                <span class="text-[10px] text-white/40 font-medium uppercase tracking-wider">${channel.group}</span>
-            </div>
+            <button onclick="toggleFavorite(event, '${channel.name}')" class="p-2 text-white/20 hover:text-red-500 transition">
+                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(channel.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            </button>
         `;
-        item.onclick = () => {
-            loadChannel(channel);
-            closeSidebar();
-        };
-        channelsContainer.appendChild(item);
+        card.onclick = () => openPlayer(channel);
+        featuredGrid.appendChild(card);
     });
+    lucide.createIcons();
 }
 
-function loadChannel(channel) {
+function renderExplore(list = channels) {
+    allChannelsList.innerHTML = '';
+    list.slice(0, 100).forEach(channel => {
+        const item = document.createElement('div');
+        item.className = 'glass p-4 rounded-2xl flex items-center space-x-4 active:scale-95 transition-all';
+        item.innerHTML = `
+            <img src="${channel.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
+            <div class="flex flex-col min-w-0 flex-grow">
+                <span class="font-bold text-sm truncate">${channel.name}</span>
+                <span class="text-[10px] text-white/30 uppercase">${channel.group}</span>
+            </div>
+            <i data-lucide="play" class="w-4 h-4 text-blue-500"></i>
+        `;
+        item.onclick = () => openPlayer(channel);
+        allChannelsList.appendChild(item);
+    });
+    lucide.createIcons();
+}
+
+// --- PLAYER LOGIC ---
+
+function openPlayer(channel) {
+    playerView.style.display = 'block';
+    document.getElementById('player-channel-name').textContent = channel.name;
+    
     if (Hls.isSupported()) {
         if (hls) hls.destroy();
         hls = new Hls();
@@ -78,112 +100,52 @@ function loadChannel(channel) {
         };
     }
     
-    currentChannelName.textContent = channel.name;
-    showToast(`Playing ${channel.name}`);
+    showToast(`Streaming ${channel.name}`);
+    resetControlsTimer();
 }
 
-// --- CONTROLS LOGIC ---
+function exitPlayer() {
+    playerView.style.display = 'none';
+    video.pause();
+    if (hls) hls.destroy();
+    hls = null;
+    document.exitFullscreen().catch(() => {});
+}
 
 function togglePlay() {
-    if (video.paused) {
-        video.play();
-        updatePlayIcon(true);
-    } else {
-        video.pause();
-        updatePlayIcon(false);
-    }
+    if (video.paused) { video.play(); updatePlayIcon(true); } 
+    else { video.pause(); updatePlayIcon(false); }
     resetControlsTimer();
 }
 
 function updatePlayIcon(isPlaying) {
-    playIcon.setAttribute('data-lucide', isPlaying ? 'pause' : 'play');
+    document.getElementById('p-icon').setAttribute('data-lucide', isPlaying ? 'pause' : 'play');
     lucide.createIcons();
 }
 
-function resetControlsTimer() {
-    controls.classList.remove('hidden');
-    clearTimeout(controlsTimeout);
-    controlsTimeout = setTimeout(() => {
-        if (!video.paused) {
-            controls.classList.add('hidden');
-        }
-    }, 4000);
-}
-
-// --- SIDEBAR ---
-
-function openSidebar() { sidebar.classList.remove('closed'); }
-function closeSidebar() { sidebar.classList.add('closed'); }
-
-// --- GESTURES (Volume & Brightness) ---
-
-playerContainer.addEventListener('touchstart', (e) => {
-    startY = e.touches[0].clientY;
-    const x = e.touches[0].clientX;
-    isRightSide = x > window.innerWidth / 2;
-    resetControlsTimer();
-});
-
-playerContainer.addEventListener('touchmove', (e) => {
-    const currentY = e.touches[0].clientY;
-    const diff = startY - currentY;
-    
-    if (isRightSide) {
-        // Volume logic
-        const change = diff / 200;
-        video.volume = Math.max(0, Math.min(1, video.volume + change));
-        showIndicator('volume', video.volume * 100);
-    } else {
-        // Mock Brightness logic (using CSS filter on container)
-        const change = diff / 200;
-        let brightness = parseFloat(getComputedStyle(video).filter.replace('brightness(', '').replace(')', '')) || 1;
-        brightness = Math.max(0.2, Math.min(1.5, brightness + change));
-        video.style.filter = `brightness(${brightness})`;
-        showIndicator('brightness', (brightness / 1.5) * 100);
-    }
-    startY = currentY;
-    e.preventDefault();
-}, { passive: false });
-
-function showIndicator(type, value) {
-    const indicator = document.getElementById(`${type}-indicator`);
-    const bar = document.getElementById(`${type}-bar`);
-    bar.style.height = `${value}%`;
-    indicator.style.opacity = '1';
-    clearTimeout(indicator.timeout);
-    indicator.timeout = setTimeout(() => {
-        indicator.style.opacity = '0';
-    }, 1000);
-}
-
-// --- UTILITIES ---
-
-function toggleFullScreen() {
-    if (!document.fullscreenElement) {
-        playerContainer.requestFullscreen().catch(err => {
-            alert(`Error attempting to enable full-screen mode: ${err.message}`);
-        });
-        document.getElementById('fs-icon').setAttribute('data-lucide', 'minimize');
-    } else {
-        document.exitFullscreen();
-        document.getElementById('fs-icon').setAttribute('data-lucide', 'maximize');
-    }
+function toggleLock() {
+    isLocked = !isLocked;
+    const icon = document.getElementById('lock-icon');
+    icon.setAttribute('data-lucide', isLocked ? 'lock' : 'unlock');
+    document.getElementById('lock-overlay').classList.toggle('active', isLocked);
+    document.getElementById('controls').style.opacity = isLocked ? '0' : '1';
     lucide.createIcons();
 }
 
-async function togglePiP() {
-    try {
-        if (video !== document.pictureInPictureElement) {
-            await video.requestPictureInPicture();
-        } else {
-            await document.exitPictureInPicture();
-        }
-    } catch (error) {
-        console.error(error);
-    }
+function onLockedScreenTouched() {
+    const toast = document.getElementById('lock-toast');
+    toast.style.opacity = '1';
+    setTimeout(() => toast.style.opacity = '0', 2000);
 }
 
-let rotation = 0;
+function toggleAspectRatio() {
+    const modes = ['fit', 'fill', 'stretch'];
+    const nextIndex = (modes.indexOf(currentAspectRatio) + 1) % modes.length;
+    currentAspectRatio = modes[nextIndex];
+    video.className = currentAspectRatio;
+    showToast(`Mode: ${currentAspectRatio.toUpperCase()}`);
+}
+
 function toggleRotate() {
     rotation = (rotation + 90) % 360;
     video.style.transform = `rotate(${rotation}deg)`;
@@ -194,51 +156,228 @@ function toggleRotate() {
         video.style.width = '100%';
         video.style.height = '100%';
     }
-    showToast(`Rotated ${rotation}°`);
 }
 
-function skip(seconds) {
-    video.currentTime += seconds;
-    showToast(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
-}
+// --- GESTURES ---
 
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.classList.remove('bg-blue-600/90', 'bg-red-500/90');
-    toast.classList.add(type === 'error' ? 'bg-red-500/90' : 'bg-blue-600/90');
-    toast.style.opacity = '1';
-    toast.style.transform = 'translate(-50%, -20px)';
+playerView.addEventListener('touchstart', (e) => {
+    if (isLocked) return;
+    startY = e.touches[0].clientY;
+    const x = e.touches[0].clientX;
+    isRightSide = x > window.innerWidth / 2;
+    resetControlsTimer();
+});
+
+playerView.addEventListener('touchmove', (e) => {
+    if (isLocked) return;
+    const currentY = e.touches[0].clientY;
+    const diff = startY - currentY;
     
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translate(-50%, 0)';
-    }, 2000);
+    if (isRightSide) {
+        updateIndicator('volume', diff / 200);
+    } else {
+        updateIndicator('brightness', diff / 200);
+    }
+    startY = currentY;
+    e.preventDefault();
+}, { passive: false });
+
+function updateIndicator(type, delta) {
+    const indicator = document.getElementById(`${type}-v`);
+    const bar = document.getElementById(type === 'volume' ? 'vol-bar' : 'br-bar');
+    
+    if (type === 'volume') {
+        video.volume = Math.max(0, Math.min(1, video.volume + delta));
+        bar.style.height = `${video.volume * 100}%`;
+    } else {
+        // Brightness simulation
+        let br = parseFloat(video.style.filter.replace('brightness(', '').replace(')', '')) || 1;
+        br = Math.max(0.2, Math.min(1.5, br + delta));
+        video.style.filter = `brightness(${br})`;
+        bar.style.height = `${(br / 1.5) * 100}%`;
+    }
+    
+    indicator.style.opacity = '1';
+    clearTimeout(indicator.to);
+    indicator.to = setTimeout(() => indicator.style.opacity = '0', 1000);
 }
 
-// --- EVENTS ---
+// --- PAGE NAVIGATION ---
 
-playPauseBtn.onclick = togglePlay;
-menuBtn.onclick = openSidebar;
-closeBtn.onclick = closeSidebar;
-video.onclick = resetControlsTimer;
-
-searchInput.oninput = (e) => {
-    const query = e.target.value.toLowerCase();
-    filteredChannels = channels.filter(c => 
-        c.name.toLowerCase().includes(query) || 
-        c.group.toLowerCase().includes(query)
-    );
-    renderChannels();
-};
-
-// --- SERVICE WORKER ---
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/service-worker.js');
+function switchPage(pageId) {
+    const pages = ['home', 'explore', 'favorites', 'settings'];
+    pages.forEach(p => {
+        const pageEl = document.getElementById(`page-${p}`);
+        const navEl = document.getElementById(`nav-${p}`);
+        
+        if (p === pageId) {
+            pageEl.classList.remove('hidden-left', 'hidden-right');
+            pageEl.style.display = 'block'; // Ensure visibility
+            navEl.classList.add('active');
+        } else {
+            pageEl.classList.add(pages.indexOf(p) < pages.indexOf(pageId) ? 'hidden-left' : 'hidden-right');
+            navEl.classList.remove('active');
+        }
     });
 }
 
-// Initial Fetch
+// --- CHANNEL UTILS ---
+
+function filterByGroup(group) {
+    // UI update for chips
+    document.querySelectorAll('.chip').forEach(c => {
+        c.classList.toggle('active', c.textContent.includes(group));
+    });
+
+    switchPage('explore'); // Switch to search/library view
+
+    if (group === 'All') {
+        renderExplore(channels);
+    } else {
+        const filtered = channels.filter(c => 
+            c.group.toLowerCase().includes(group.toLowerCase()) || 
+            c.name.toLowerCase().includes(group.toLowerCase())
+        );
+        renderExplore(filtered);
+    }
+}
+
+// --- FAVORITES ---
+
+function toggleFavorite(e, name) {
+    e.stopPropagation();
+    let favs = JSON.parse(localStorage.getItem('favs') || '[]');
+    if (favs.includes(name)) {
+        favs = favs.filter(f => f !== name);
+    } else {
+        favs.push(name);
+    }
+    localStorage.setItem('favs', JSON.stringify(favs));
+    renderHome();
+    renderFavorites();
+}
+
+function isFavorite(name) {
+    const favs = JSON.parse(localStorage.getItem('favs') || '[]');
+    return favs.includes(name);
+}
+
+function renderFavorites() {
+    const favs = JSON.parse(localStorage.getItem('favs') || '[]');
+    const favChannels = channels.filter(c => favs.includes(c.name));
+    
+    if (favChannels.length === 0) {
+        favoritesList.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-20 text-white/30 space-y-4">
+                <i data-lucide="heart" class="w-16 h-16 opacity-10"></i>
+                <p>No favorites yet</p>
+            </div>
+        `;
+    } else {
+        favoritesList.innerHTML = '';
+        favChannels.forEach(channel => {
+            const item = document.createElement('div');
+            item.className = 'glass p-4 rounded-2xl flex items-center space-x-4';
+            item.innerHTML = `
+                <img src="${channel.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
+                <div class="flex flex-col flex-grow">
+                    <span class="font-bold text-sm">${channel.name}</span>
+                </div>
+                <button onclick="toggleFavorite(event, '${channel.name}')" class="text-red-500"><i data-lucide="heart" class="fill-red-500 w-5 h-5"></i></button>
+            `;
+            item.onclick = () => openPlayer(channel);
+            favoritesList.appendChild(item);
+        });
+    }
+    lucide.createIcons();
+}
+
+// --- SEARCH ---
+
+function toggleSearch() {
+    searchModal.classList.toggle('hidden');
+    searchModal.classList.toggle('flex');
+    if (!searchModal.classList.contains('hidden')) globalSearch.focus();
+}
+
+globalSearch.oninput = (e) => {
+    const q = e.target.value.toLowerCase();
+    const results = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 20);
+    searchResults.innerHTML = '';
+    results.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'glass p-4 rounded-2xl flex items-center space-x-4';
+        item.innerHTML = `
+            <img src="${c.logo}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='/static/icon-192.png'">
+            <div class="flex flex-col min-w-0 flex-grow">
+                <span class="font-bold text-sm truncate">${c.name}</span>
+            </div>
+        `;
+        item.onclick = () => { openPlayer(c); toggleSearch(); };
+        searchResults.appendChild(item);
+    });
+};
+
+// --- MISC ---
+
+function resetControlsTimer() {
+    const ctrl = document.getElementById('controls');
+    ctrl.style.opacity = '1';
+    clearTimeout(controlsTimeout);
+    controlsTimeout = setTimeout(() => {
+        if (!video.paused && !isLocked) ctrl.style.opacity = '0';
+    }, 4000);
+}
+
+function showToast(msg) {
+    const t = document.getElementById('global-toast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translate(-50%, 20px)';
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translate(-50%, 0)'; }, 2000);
+}
+
+// Aspect Ratio Helper
+function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+        playerView.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+function skip(s) {
+    video.currentTime += s;
+    showToast(`${s > 0 ? '+' : ''}${s}s`);
+}
+
+// Bindings
+document.getElementById('play-pause-btn').onclick = togglePlay;
+video.onclick = resetControlsTimer;
+
+// Init
 fetchChannels();
-resetControlsTimer();
+switchPage('home');
+
+// --- PWA INSTALLATION ---
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('install-banner').classList.remove('hidden');
+});
+
+document.getElementById('install-btn').onclick = async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            document.getElementById('install-banner').classList.add('hidden');
+        }
+        deferredPrompt = null;
+    }
+};
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+}
