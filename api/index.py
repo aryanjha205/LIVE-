@@ -34,8 +34,11 @@ else:
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False  # Explicitly disable SSL when using TLS
 app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
-app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
+# Ensure the App Password has NO spaces
+raw_password = os.getenv("MAIL_PASSWORD", "")
+app.config['MAIL_PASSWORD'] = "".join(raw_password.split()) 
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
 
 mail = Mail(app)
@@ -70,7 +73,9 @@ def parse_m3u(file_content):
 
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
-    if not db: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
+    if not db: return jsonify({"error": "Configuration Error: MONGO_URI missing on Vercel"}), 503
+    if not os.getenv("MAIL_USERNAME"): return jsonify({"error": "Configuration Error: MAIL_USERNAME missing"}), 503
+    
     email = request.json.get('email', '').strip().lower()
     if not email: return jsonify({"error": "Email is required"}), 400
     
@@ -81,14 +86,15 @@ def send_otp():
     otps_col.update_one({"_id": email}, {"$set": {"otp": otp, "expires_at": expires_at}}, upsert=True)
     
     try:
-        msg = Message("Live+ Verification Code", recipients=[email])
-        msg.body = f"Your verification code for Live+ is: {otp}. It will expire in 10 minutes."
+        msg = Message("Verification Code: " + otp, recipients=[email])
+        msg.body = f"Your verification code for Live+ is: {otp}"
         msg.html = render_template('otp_email.html', otp=otp)
         mail.send(msg)
         return jsonify({"message": "OTP sent successfully"})
     except Exception as e:
-        print(f"Mail Error: {e}")
-        return jsonify({"error": "Failed to send email"}), 500
+        print(f"MAIL ERROR DETAILED: {str(e)}")
+        # Return the actual error for debugging if it's on dev
+        return jsonify({"error": f"Email service error. Check Vercel logs.", "details": str(e)}), 500
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():

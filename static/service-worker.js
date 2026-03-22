@@ -37,19 +37,17 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Fetch Event (Required for Chrome Install Prompt)
+// Fetch Event (REQUIRED: MUST call respondWith for Chrome Install Prompt)
 self.addEventListener('fetch', (event) => {
   // Check if it's a request for an API or the playlist – we don't cache those
   if (event.request.url.includes('/api/') || event.request.url.includes('.m3u')) {
-    return; // Let it fetch normally
+    event.respondWith(fetch(event.request)); // MUST call respondWith
+    return;
   }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
+      return cachedResponse || fetch(event.request).catch(() => {
         // Fallback or handle offline
         if (event.request.mode === 'navigate') {
           return caches.match('/');
