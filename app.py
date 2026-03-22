@@ -24,10 +24,17 @@ if not MONGO_URI:
     print("WARNING: MONGO_URI not found.")
     db = None
 else:
-    client = MongoClient(MONGO_URI)
-    db = client['live_plus']
-    users_col = db['users']
-    otps_col = db['otps']
+    try:
+        # User selection timeout helps identify connection issues immediately
+        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        db = client['live_plus']
+        users_col = db['users']
+        otps_col = db['otps']
+        # Preliminary check
+        client.admin.command('ping')
+    except Exception as e:
+        print(f"DATABASE CONNECTION ERROR: {e}")
+        db = None
 
 # Email Setup
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'

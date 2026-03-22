@@ -68,9 +68,14 @@ async function sendOTP() {
         });
         
         if (!res.ok) {
-            const text = await res.text();
-            console.error("Server Error:", text);
-            throw new Error(`Server returned ${res.status}. Check Vercel Logs.`);
+            let errorMsg = `Server returned ${res.status}`;
+            try {
+                const errorData = await res.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch (e) {
+                // Not JSON
+            }
+            throw new Error(errorMsg);
         }
         
         const data = await res.json();
@@ -100,8 +105,12 @@ async function verifyOTP() {
         });
         
         if (!res.ok) {
-            const text = await res.text();
-            throw new Error("Verification failed. Please check OTP.");
+            let errorMsg = "Verification failed";
+            try {
+                const errorData = await res.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch (e) {}
+            throw new Error(errorMsg);
         }
         
         const data = await res.json();
