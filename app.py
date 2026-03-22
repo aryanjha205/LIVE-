@@ -75,7 +75,7 @@ def parse_m3u(file_content):
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
     try:
-        if not db: return jsonify({"error": "Config Error: MONGO_URI missing on Vercel"}), 503
+        if db is None: return jsonify({"error": "Config Error: MONGO_URI missing on Vercel"}), 503
         if not MAIL_USERNAME: return jsonify({"error": "Config Error: MAIL_USERNAME missing"}), 503
         
         email = request.json.get('email', '').strip().lower()
@@ -125,7 +125,7 @@ def handle_exception(e):
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():
-    if not db: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
+    if db is None: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
     email = request.json.get('email', '').strip().lower()
     otp = request.json.get('otp', '').strip()
     
@@ -162,6 +162,7 @@ def verify_otp():
 
 @app.route('/api/profile/update', methods=['POST'])
 def update_profile():
+    if db is None: return jsonify({"error": "Database unavailable"}), 503
     data = request.json
     email = data.get('email')
     if not email: return jsonify({"error": "Unauthorized"}), 401
