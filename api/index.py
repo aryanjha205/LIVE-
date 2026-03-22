@@ -20,10 +20,15 @@ app.secret_key = os.getenv("SECRET_KEY", "DEFAULT_SECRET_FOR_DEV")
 
 # MongoDB Setup
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI)
-db = client['live_plus']
-users_col = db['users']
-otps_col = db['otps']
+if not MONGO_URI:
+    print("WARNING: MONGO_URI not found in environment variables.")
+    client = None
+    db = None
+else:
+    client = MongoClient(MONGO_URI)
+    db = client['live_plus']
+    users_col = db['users']
+    otps_col = db['otps']
 
 # Email Setup
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -65,6 +70,7 @@ def parse_m3u(file_content):
 
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
+    if not db: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
     email = request.json.get('email', '').strip().lower()
     if not email: return jsonify({"error": "Email is required"}), 400
     
@@ -86,6 +92,7 @@ def send_otp():
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():
+    if not db: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
     email = request.json.get('email', '').strip().lower()
     otp = request.json.get('otp', '').strip()
     

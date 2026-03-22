@@ -66,6 +66,13 @@ async function sendOTP() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
+        
+        if (!res.ok) {
+            const text = await res.text();
+            console.error("Server Error:", text);
+            throw new Error(`Server returned ${res.status}. Check Vercel Logs.`);
+        }
+        
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         
@@ -91,6 +98,12 @@ async function verifyOTP() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, otp })
         });
+        
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error("Verification failed. Please check OTP.");
+        }
+        
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         
