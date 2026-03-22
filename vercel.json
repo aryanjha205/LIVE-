@@ -1,42 +1,26 @@
 {
   "version": 2,
-  "rewrites": [
+  "builds": [
     {
-      "source": "/service-worker.js",
-      "destination": "/static/service-worker.js"
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/service-worker.js",
+      "dest": "/static/service-worker.js"
     },
     {
-      "source": "/manifest.json",
-      "destination": "/static/manifest.json"
+      "src": "/manifest.json",
+      "dest": "/static/manifest.json"
     },
     {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "src": "/(.*)",
+      "dest": "app.py"
     }
   ],
   "headers": [
-    {
-      "source": "/service-worker.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        },
-        {
-          "key": "Service-Worker-Allowed",
-          "value": "/"
-        }
-      ]
-    },
-    {
-      "source": "/manifest.json",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/manifest+json"
-        }
-      ]
-    },
     {
       "source": "/static/(.*)",
       "headers": [

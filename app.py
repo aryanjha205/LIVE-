@@ -1,23 +1,55 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 import requests
 import re
+import os
+import random
+import datetime
+from pymongo import MongoClient
+from flask_mail import Mail, Message
+from dotenv import load_dotenv
 
-app = Flask(__name__)
+# Load local .env if present
+load_dotenv()
 
-# URL of the M3U playlist
+# --- CONFIGURATION ---
+# In root app.py, folders are adjacent
+app = Flask(__name__, 
+            template_folder='templates', 
+            static_folder='static')
+app.secret_key = os.getenv("SECRET_KEY", "DEFAULT_SECRET_FOR_DEV")
+
+# MongoDB Setup
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    print("WARNING: MONGO_URI not found.")
+    db = None
+else:
+    client = MongoClient(MONGO_URI)
+    db = client['live_plus']
+    users_col = db['users']
+    otps_col = db['otps']
+
+# Email Setup
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
+raw_password = os.getenv("MAIL_PASSWORD", "")
+app.config['MAIL_PASSWORD'] = "".join(raw_password.split()) 
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
+
+mail = Mail(app)
+
 PLAYLIST_URL = "https://iptv-org.github.io/iptv/index.m3u"
 
+# Helper: Parse M3U
 def parse_m3u(file_content):
     channels = []
     current_channel = {}
-    
-    # Regex for parsing EXTINF metadata
-    # Format: #EXTINF:-1 tvg-id="..." tvg-logo="..." group-title="...",Channel Name
     extinf_re = re.compile(r'#EXTINF:(-?\d+)(.*),(.*)')
-    # Regex for key-value pairs in EXTINF: tvg-logo="url"
     logo_re = re.compile(r'tvg-logo="([^"]+)"')
     group_re = re.compile(r'group-title="([^"]+)"')
-    
     lines = file_content.splitlines()
     for i in range(len(lines)):
         line = lines[i].strip()
@@ -25,19 +57,92 @@ def parse_m3u(file_content):
             match = extinf_re.match(line)
             if match:
                 current_channel["name"] = match.group(3).strip()
-                
                 logo_match = logo_re.search(line)
-                current_channel["logo"] = logo_match.group(1) if logo_match else "https://via.placeholder.com/150?text=TV"
-                
+                current_channel["logo"] = logo_match.group(1) if logo_match else ""
                 group_match = group_re.search(line)
                 current_channel["group"] = group_match.group(1) if group_match else "General"
-                
         elif line.startswith("http"):
             current_channel["url"] = line
             channels.append(current_channel)
             current_channel = {}
-            
     return channels
+
+# --- AUTH ROUTES ---
+
+@app.route('/api/auth/send-otp', methods=['POST'])
+def send_otp():
+    if not db: return jsonify({"error": "Configuration Error: MONGO_URI missing on Vercel"}), 503
+    if not os.getenv("MAIL_USERNAME"): return jsonify({"error": "Configuration Error: MAIL_USERNAME missing"}), 503
+    
+    email = request.json.get('email', '').strip().lower()
+    if not email: return jsonify({"error": "Email is required"}), 400
+    
+    otp = str(random.randint(100000, 999999))
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
+    
+    otps_col.update_one({"_id": email}, {"$set": {"otp": otp, "expires_at": expires_at}}, upsert=True)
+    
+    try:
+        msg = Message("Verification Code: " + otp, recipients=[email])
+        msg.body = f"Your verification code for Live+ is: {otp}"
+        msg.html = render_template('otp_email.html', otp=otp)
+        mail.send(msg)
+        return jsonify({"message": "OTP sent successfully"})
+    except Exception as e:
+        print(f"MAIL ERROR: {str(e)}")
+        return jsonify({"error": "Email service error. Check Vercel logs.", "details": str(e)}), 500
+
+@app.route('/api/auth/verify-otp', methods=['POST'])
+def verify_otp():
+    if not db: return jsonify({"error": "System Configuration Error: MONGO_URI missing on Vercel."}), 503
+    email = request.json.get('email', '').strip().lower()
+    otp = request.json.get('otp', '').strip()
+    
+    stored = otps_col.find_one({"_id": email})
+    if not stored or stored['otp'] != otp:
+        return jsonify({"error": "Invalid or expired OTP"}), 400
+    
+    if stored['expires_at'] < datetime.datetime.utcnow():
+        return jsonify({"error": "OTP expired"}), 400
+    
+    user = users_col.find_one({"_id": email})
+    if not user:
+        user = {
+            "_id": email,
+            "name": email.split('@')[0],
+            "bio": "Watching Live+",
+            "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=" + email,
+            "favs": [],
+            "created_at": datetime.datetime.utcnow()
+        }
+        users_col.insert_one(user)
+    
+    otps_col.delete_one({"_id": email})
+    
+    return jsonify({
+        "message": "Login successful",
+        "user": {
+            "name": user['name'],
+            "email": user['_id'],
+            "bio": user.get('bio', ''),
+            "avatar": user.get('avatar', '')
+        }
+    })
+
+@app.route('/api/profile/update', methods=['POST'])
+def update_profile():
+    data = request.json
+    email = data.get('email')
+    if not email: return jsonify({"error": "Unauthorized"}), 401
+    update_data = {
+        "name": data.get('name'),
+        "bio": data.get('bio'),
+        "avatar": data.get('avatar')
+    }
+    users_col.update_one({"_id": email}, {"$set": update_data})
+    return jsonify({"message": "Profile updated successfully"})
+
+# --- MAIN ROUTES ---
 
 @app.route('/')
 def index():
@@ -61,4 +166,5 @@ def manifest():
     return app.send_static_file('manifest.json')
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.getenv("PORT", 5000))
+    app.run(debug=True, port=port)
