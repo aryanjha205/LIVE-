@@ -7,29 +7,31 @@ import datetime
 from pymongo import MongoClient
 from flask_mail import Mail, Message
 
+from dotenv import load_dotenv
+
+# Load local .env if present
+load_dotenv()
+
 # --- CONFIGURATION ---
 app = Flask(__name__, 
             template_folder='../templates', 
             static_folder='../static')
-app.secret_key = "SECRET_SUPER_KEY_LIVE_PLUS" # Should be random in production
+app.secret_key = os.getenv("SECRET_KEY", "DEFAULT_SECRET_FOR_DEV")
 
 # MongoDB Setup
-# User provided: mongodb+srv://ravalmohit390_db_user:<db_password>@cluster0.ybz53dp.mongodb.net/?appName=Cluster0
-# Password: MOHIT567
-MONGO_URI = "mongodb+srv://ravalmohit390_db_user:MOHIT567@cluster0.ybz53dp.mongodb.net/?appName=Cluster0"
+MONGO_URI = os.getenv("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client['live_plus']
 users_col = db['users']
 otps_col = db['otps']
 
 # Email Setup
-# User provided: bharatlabs.in@gmail.com / ndtv uymm ykea qczo
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'bharatlabs.in@gmail.com'
-app.config['MAIL_PASSWORD'] = 'ndtv uymm ykea qczo'
-app.config['MAIL_DEFAULT_SENDER'] = 'bharatlabs.in@gmail.com'
+app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
+app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv("MAIL_USERNAME")
 
 mail = Mail(app)
 
@@ -159,4 +161,5 @@ def manifest():
     return app.send_static_file('manifest.json')
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.getenv("PORT", 5000))
+    app.run(debug=True, port=port)
