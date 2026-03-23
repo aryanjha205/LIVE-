@@ -47,7 +47,7 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
+PLAYLIST_URL = "https://raw.githubusercontent.com/LaneSh44/SamsungTVPlus-M3U/main/SamsungTVPlus-India.m3u"
 CHANNELS_CACHE = []
 CACHE_TIME = 0
 
