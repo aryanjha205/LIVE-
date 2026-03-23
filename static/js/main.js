@@ -32,13 +32,7 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 
 // --- INITIALIZATION ---
 
-async function init() {
-    if (currentUser) {
-        authOverlay.classList.add('hidden');
-        updateUIWithUser();
-        fetchChannels();
-    }
-}
+
 
 async function fetchChannels() {
     console.log("Fetching channels...");
@@ -440,8 +434,20 @@ if (screen.orientation) {
 }
 
 // Init
+async function init() {
+    if (currentUser) {
+        authOverlay.classList.add('hidden');
+        updateUIWithUser();
+        fetchChannels();
+    }
+    
+    // Add keyboard support for forms
+    authEmail.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendOTP(); });
+    otpInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') verifyOTP(); });
+}
+
 init();
 
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js');
+    navigator.serviceWorker.register('/service-worker.js').catch(e => console.log("SW Register Error:", e));
 }

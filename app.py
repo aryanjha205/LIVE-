@@ -79,6 +79,7 @@ def send_otp():
     try:
         if db is None: return jsonify({"error": "Config Error: MONGO_URI missing on Vercel"}), 503
         if not MAIL_USERNAME: return jsonify({"error": "Config Error: MAIL_USERNAME missing"}), 503
+        if not MAIL_PASSWORD: return jsonify({"error": "Config Error: MAIL_PASSWORD missing"}), 503
         
         email = request.json.get('email', '').strip().lower()
         if not email: return jsonify({"error": "Email is required"}), 400
@@ -90,12 +91,12 @@ def send_otp():
         
         # Using smtplib directly for stability in serverless environments
         try:
-            msg = MIMEMultipart()
-            msg['From'] = MAIL_USERNAME
+            msg = MIMEMultipart('alternative')
+            msg['From'] = f"Live+ <{MAIL_USERNAME}>"
             msg['To'] = email
-            msg['Subject'] = f"Verification Code: {otp}"
+            msg['Subject'] = f"{otp} is your Live+ verification code"
             
-            body = f"Your Live+ code: {otp}"
+            body = f"Your Live+ verification code: {otp}\n\nThis code expires in 10 minutes."
             html = render_template('otp_email.html', otp=otp)
             
             msg.attach(MIMEText(body, 'plain'))
@@ -108,9 +109,10 @@ def send_otp():
             server.send_message(msg)
             server.quit()
             
+            print(f"OTP SUCCESSFULLY SENT TO: {email}")
             return jsonify({"message": "OTP sent successfully"})
         except Exception as e:
-            print(f"SMTP ERROR: {e}")
+            print(f"SMTP ERROR for {email}: {e}")
             return jsonify({"error": f"Mail failed: {str(e)}"}), 500
             
     except Exception as e:
@@ -187,21 +189,29 @@ def update_profile():
 def index():
     return render_template('index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file('icon-192.png')
+
 @app.route('/api/channels')
 def get_channels():
     try:
-        # Increase timeout for IPTV-org list as it can be large/slow
-        response = requests.get(PLAYLIST_URL, timeout=20)
+        # Check if we can use a smaller playlist or limit the current one
+        # The main playlist is huge; we try to fetch it but limit processing
+        response = requests.get(PLAYLIST_URL, timeout=15)
         if not response.ok:
+            print(f"IPTV FETCH FAILED: {response.status_code}")
             return jsonify({"error": f"IPTV provider error: {response.status_code}"}), 502
             
+        # Optimization: only parse first 1000 lines if it's too large, or handle with care
+        # For now, let's parse and return first 500 channels for performance
         channels = parse_m3u(response.text)
         
-        # If no channels found, return a minimal set to avoid empty screen
         if not channels:
             return jsonify([{"name": "No Channels Found", "group": "Info", "url": "", "logo": ""}])
             
-        return jsonify(channels)
+        # Return a manageable amount for mobile apps
+        return jsonify(channels[:500])
     except Exception as e:
         print(f"FETCH ERROR: {e}")
         return jsonify({"error": f"Failed to load IPTV list: {str(e)}"}), 500
