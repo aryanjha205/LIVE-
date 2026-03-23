@@ -17,12 +17,12 @@
     
     <style>
         :root {
-            --primary: #3b82f6;
-            --accent: #22d3ee;
+            --primary: #3d5afe;
+            --accent: #00e5ff;
             --bg: #000000;
             --surface: #0a0a0b;
-            --safe-top: env(safe-area-inset-top);
-            --safe-bottom: env(safe-area-inset-bottom);
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
         * {
@@ -40,6 +40,7 @@
             width: 100vw;
             display: flex;
             flex-direction: column;
+            padding-top: var(--safe-top);
         }
 
         h1, h2, h3 { font-family: 'Outfit', sans-serif; }
@@ -83,12 +84,14 @@
         /* Bottom Nav */
         .bottom-nav {
             padding-bottom: var(--safe-bottom);
-            height: calc(80px + var(--safe-bottom));
+            height: calc(85px + var(--safe-bottom));
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            backdrop-filter: blur(20px);
         }
 
-        .nav-item.active { color: var(--primary); }
-        .nav-item.active i { transform: translateY(-6px); filter: drop-shadow(0 0 12px var(--primary)); }
-        .nav-item i { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .nav-item.active { color: #00e5ff; }
+        .nav-item.active i { transform: translateY(-8px) scale(1.1); filter: drop-shadow(0 0 12px #00e5ff); }
+        .nav-item i { transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
 
         /* Cards */
         .channel-card {
@@ -230,13 +233,13 @@
         <!-- Home Page -->
         <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-12 pt-8">
             
-            <!-- Welcome Header (Premium Text Only) -->
-            <div class="space-y-2 mt-4">
+            <!-- Welcome Header (Clean & Professional) -->
+            <div class="space-y-3 mt-4">
                 <div class="flex items-center space-x-3">
-                    <span class="w-10 h-[2px] bg-blue-500 rounded-full"></span>
-                    <span id="welcome-text" class="text-blue-500 text-[10px] font-black uppercase tracking-[5px]">Welcome Back</span>
+                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]"></span>
+                    <span id="welcome-text" class="text-white/40 text-[10px] font-bold uppercase tracking-[4px]">Verified Member</span>
                 </div>
-                <h2 class="text-5xl font-black tracking-tighter leading-none"><span class="text-white/40">Samsung</span> <br> <span class="text-gradient">Live TV Hub</span></h2>
+                <h2 class="text-5xl font-black tracking-tighter leading-[0.9]"><span class="text-white">Premium</span> <br> <span class="text-gradient">Live TV Hub</span></h2>
             </div>
 
             <!-- Recently Watched -->
