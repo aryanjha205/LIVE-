@@ -35,8 +35,11 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 
 
 
-async function fetchChannels() {
-    console.log("Fetching channels...");
+async function fetchChannels(retryCount = 0) {
+    console.log(`Fetching channels (Attempt ${retryCount + 1})...`);
+    const loadingElem = document.getElementById('category-rows');
+    if (loadingElem && retryCount === 0) loadingElem.innerHTML = '<div class="py-20 text-center opacity-40"><div class="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div><p class="text-xs font-bold uppercase tracking-[3px]">Loading TV Hub...</p></div>';
+    
     try {
         const response = await fetch('/api/channels');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -44,17 +47,30 @@ async function fetchChannels() {
         channels = await response.json();
         console.log(`Loaded ${channels.length} channels.`);
         
-        if (channels.length === 0) {
-            showToast('No channels available', 'info');
+        if (!channels || channels.length === 0 || channels[0].name === "Server Maintenance") {
+             if (retryCount < 2) {
+                 setTimeout(() => fetchChannels(retryCount + 1), 3000);
+                 return;
+             }
+             showToast('Service update in progress. Please refresh.', 'info');
         }
         
         renderHome();
         renderExplore();
         renderFavorites();
         renderRecent();
+        
+        // Hide auth if already logged in
+        if (currentUser) {
+            authOverlay.style.display = 'none';
+        }
     } catch (error) {
         console.error('Channel Fetch ERROR:', error);
-        showToast('Stream Server Unreachable', 'error');
+        if (retryCount < 2) {
+             setTimeout(() => fetchChannels(retryCount + 1), 5000);
+             return;
+        }
+        showToast('Connection unstable. Retrying...', 'error');
     }
 }
 
@@ -265,26 +281,43 @@ function renderHome() {
     if (!container || !channels.length) return;
     container.innerHTML = '';
     
-    // Group 1: Recently Watched
-    const recent = JSON.parse(localStorage.getItem('recent_channels') || '[]');
-    if (recent.length > 0) {
-        container.appendChild(createCategoryRow('Recently Watched', recent));
-    }
+    // 1. Recently Watched
+    renderRecent(); // This now updates #recent-section
 
-    // Grouping all channels by category
+    // 2. Intelligent Categorization
+    const categoryMap = {
+        'News': ['News', 'Local News', 'Live News', 'Hindi News', 'English News'],
+        'Movies': ['Movies', 'Cinema', 'Hindi Movies', 'English Movies', 'South Movies'],
+        'Sports': ['Sports', 'Cricket', 'Live Sports'],
+        'Music': ['Music', 'Bollywood Music', 'Classical Music'],
+        'Entertainment': ['Entertainment', 'GEC', 'Series', 'General'],
+        'Kids': ['Kids', 'Animation', 'Cartoon'],
+        'Religious': ['Religious', 'Spiritual', 'Devotional']
+    };
+
     const categories = {};
     channels.forEach(ch => {
-        const cat = ch.group || 'General';
-        if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(ch);
+        let group = ch.group || 'General';
+        // Normalize group
+        for (const [key, aliases] of Object.entries(categoryMap)) {
+            if (aliases.some(a => group.includes(a))) {
+                group = key;
+                break;
+            }
+        }
+        if (!categories[group]) categories[group] = [];
+        categories[group].push(ch);
     });
 
-    // Sort categories by popularity (number of channels) and render top 12
-    Object.keys(categories)
-        .sort((a,b) => categories[b].length - categories[a].length)
-        .slice(0, 12)
+    // Priority Order for categories
+    const priority = ['News', 'Movies', 'Sports', 'Entertainment', 'Music', 'Kids', 'Religious'];
+    
+    // Sort & Render
+    [...priority, ...Object.keys(categories).filter(k => !priority.includes(k))]
+        .filter(cat => categories[cat] && categories[cat].length > 0)
+        .slice(0, 10)
         .forEach(catName => {
-            container.appendChild(createCategoryRow(catName, categories[catName].slice(0, 40)));
+            container.appendChild(createCategoryRow(catName, categories[catName].slice(0, 30)));
         });
 }
 
@@ -370,6 +403,9 @@ function openPlayer(channel) {
         return;
     }
     
+    // Fix: Add a CORS Proxy for public m3u8 links that often block referrers
+    const finalUrl = channel.url.startsWith('https://') ? `https://corsproxy.io/?${encodeURIComponent(channel.url)}` : channel.url;
+    
     playerView.style.display = 'block';
     playerLoader.classList.remove('hidden');
     document.getElementById('player-channel-name').textContent = channel.name;
@@ -378,6 +414,7 @@ function openPlayer(channel) {
     addToRecent(channel);
 
     const playStream = () => {
+        console.log("Stream successfully parsed and starting playback");
         playerLoader.classList.add('hidden');
         video.play().catch(e => {
             console.warn("Autoplay blocked or failed:", e);
@@ -387,21 +424,21 @@ function openPlayer(channel) {
     };
 
     if (Hls.isSupported()) {
+        console.log("Initializing HLS for:", finalUrl);
         if (hls) hls.destroy();
         hls = new Hls({
-            xhrSetup: function(xhr, url) {
-                // If the channel has custom headers (like User-Agent), we'd need a proxy
-                // because browsers don't allow setting UA. For now, we proceed normally.
-            }
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 60
         });
-        hls.loadSource(channel.url);
+        hls.loadSource(finalUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, playStream);
         hls.on(Hls.Events.ERROR, (event, data) => {
             if (data.fatal) {
                 console.error("HLS Fatal Error:", data);
                 playerLoader.classList.add('hidden');
-                showToast("Stream Error: " + (data.type || "Fatal"), "error");
+                showToast("Stream Error: Verify Connection", "error");
                 switch(data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
                         hls.startLoad();
@@ -416,7 +453,7 @@ function openPlayer(channel) {
             }
         });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = channel.url;
+        video.src = finalUrl;
         video.onloadedmetadata = playStream;
         video.onerror = () => {
             playerLoader.classList.add('hidden');
@@ -592,16 +629,21 @@ function renderFavorites() {
 // --- NEW FEATURES ---
 
 function addToRecent(channel) {
-    let recents = JSON.parse(localStorage.getItem('recents') || '[]');
-    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 5);
-    localStorage.setItem('recents', JSON.stringify(recents));
+    let recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
+    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 8);
+    localStorage.setItem('recent_channels', JSON.stringify(recents));
     renderRecent();
+    // Also re-render home to keep it synced
+    renderHome();
 }
 
 function renderRecent() {
     const section = document.getElementById('recent-section');
     const scroll = document.getElementById('recent-scroll');
-    const recents = JSON.parse(localStorage.getItem('recents') || '[]');
+    if (!section || !scroll) return;
+    
+    // Use 'recent_channels' consistently with renderHome
+    const recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
     
     if (recents.length === 0) {
         section.classList.add('hidden');
@@ -609,14 +651,20 @@ function renderRecent() {
     }
     
     section.classList.remove('hidden');
-    scroll.innerHTML = recents.map(c => `
-        <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-20 text-center space-y-2">
+    scroll.innerHTML = '';
+    
+    recents.forEach((c, idx) => {
+        const item = document.createElement('div');
+        item.className = 'flex-shrink-0 w-20 text-center space-y-2 cursor-pointer active:scale-95 transition';
+        item.innerHTML = `
             <div class="w-16 h-16 rounded-2xl glass p-1 mx-auto overflow-hidden">
                 <img src="${c.logo}" class="w-full h-full object-cover rounded-xl" onerror="this.src='/static/icon-192.png'">
             </div>
-            <p class="text-[10px] font-bold truncate opacity-60">${c.name}</p>
-        </div>
-    `).join('');
+            <p class="text-[10px] font-bold truncate opacity-60 px-1">${c.name}</p>
+        `;
+        item.onclick = () => openPlayer(c);
+        scroll.appendChild(item);
+    });
 }
 
 function copyShareLink() {

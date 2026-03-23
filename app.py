@@ -40,6 +40,7 @@ else:
 # Define collections safely
 users_col = db['users'] if db is not None else None
 otps_col = db['otps'] if db is not None else None
+channels_col = db['channels'] if db is not None else None
 
 # Email Setup Variables from Env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -228,27 +229,50 @@ def get_channels():
     global CHANNELS_CACHE, CACHE_TIME
     try:
         now = time.time()
-        # Serve from cache if available and not expired (1 hour)
-        if CHANNELS_CACHE and (now - CACHE_TIME < 3600):
+        
+        # 1. Check local global cache (fastest)
+        if CHANNELS_CACHE and (now - CACHE_TIME < 300): # 5 mins locally
             return jsonify(CHANNELS_CACHE)
 
-        response = requests.get(PLAYLIST_URL, timeout=10)
+        # 2. Check MongoDB cache (persistent across Vercel cold starts)
+        if channels_col is not None:
+            cache_doc = channels_col.find_one({"_id": "cache"})
+            if cache_doc:
+                last_update = cache_doc.get('time', 0)
+                # If cache is valid (less than 1 hour old)
+                if (now - last_update < 3600) and cache_doc.get('data'):
+                    CHANNELS_CACHE = cache_doc['data']
+                    CACHE_TIME = last_update
+                    return jsonify(CHANNELS_CACHE)
+        
+        # 3. If no cache or cache expired, fetch from source
+        print("Fetching fresh channels from source...")
+        response = requests.get(PLAYLIST_URL, timeout=15)
         if not response.ok:
-            if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-            return jsonify([{"name": "Server Unavailable", "group": "System", "url": "", "logo": ""}])
+             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
+             return jsonify([{"name": "Server Maintenance", "group": "System", "url": "", "logo": ""}])
             
         parsed = parse_m3u(response.text)
         if not parsed:
              if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-             return jsonify([{"name": "Temporarily Unavailable", "group": "System", "url": "", "logo": ""}])
+             return jsonify([{"name": "Unavailable", "group": "System", "url": "", "logo": ""}])
              
         CHANNELS_CACHE = parsed[:1000]
         CACHE_TIME = now
+        
+        # Update MongoDB for next cold start
+        if channels_col is not None:
+            channels_col.update_one(
+                {"_id": "cache"}, 
+                {"$set": {"data": CHANNELS_CACHE, "time": CACHE_TIME}}, 
+                upsert=True
+            )
+            
         return jsonify(CHANNELS_CACHE)
     except Exception as e:
         print(f"FETCH ERROR: {e}")
         if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-        return jsonify({"error": "Stream server timed out. Please refresh."}), 500
+        return jsonify({"error": "Gateway Timeout. Please reload app."}), 500
 
 @app.route('/service-worker.js')
 def sw():
