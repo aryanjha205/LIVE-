@@ -18,11 +18,7 @@ const otpInput = document.getElementById('otp-input');
 const authStep1 = document.getElementById('auth-step-1');
 const authStep2 = document.getElementById('auth-step-2');
 
-let movies = [];
-let trendingMovies = []; // For Hero/Discover
-let popularMovies = [];
-let topMovies = [];
-let popularShows = [];
+let channels = [];
 let hls = null;
 let isLocked = false;
 let currentAspectRatio = 'fill';
@@ -30,9 +26,6 @@ let rotation = 0;
 let controlsTimeout;
 let startY = 0;
 let isRightSide = false;
-let currentHeroIndex = 0;
-let heroInterval;
-const genres = ["All", "Action", "Comedy", "Drama", "Horror", "Sci-Fi", "Romance", "Mystery", "Animation"];
 
 // User state
 let currentUser = JSON.parse(localStorage.getItem('user')) || null;
@@ -41,49 +34,26 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 
 
 
-async function fetchMovies() {
-    console.log("Fetching movies...");
+async function fetchChannels() {
+    console.log("Fetching channels...");
     try {
-        const results = await Promise.allSettled([
-            fetch('/api/movies').then(r => r.json()),
-            fetch('/api/discover').then(r => r.json()),
-            fetch('/api/movies/popular').then(r => r.json()),
-            fetch('/api/movies/rating').then(r => r.json()),
-            fetch('/api/shows/popular').then(r => r.json())
-        ]);
+        const response = await fetch('/api/channels');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        // Map individual results
-        movies = results[0].status === 'fulfilled' ? results[0].value : [];
-        trendingMovies = results[1].status === 'fulfilled' ? results[1].value : [];
-        popularMovies = results[2].status === 'fulfilled' ? results[2].value : [];
-        topMovies = results[3].status === 'fulfilled' ? results[3].value : [];
-        popularShows = results[4].status === 'fulfilled' ? results[4].value : [];
+        channels = await response.json();
+        console.log(`Loaded ${channels.length} channels.`);
         
-        if (results.some(r => r.status === 'rejected')) {
-            console.warn('Some API feeds failed to load');
+        if (channels.length === 0) {
+            showToast('No channels available', 'info');
         }
-
-        renderGenres();
+        
         renderHome();
         renderExplore();
         renderFavorites();
         renderRecent();
-        startHeroAutoSlide();
-        
-        // Hide Splash regardless
-        setTimeout(hideSplash, 1500);
     } catch (error) {
-        console.error('Core Fetch ERROR:', error);
-        showToast('System Error', 'error');
-        setTimeout(hideSplash, 2000);
-    }
-}
-
-function hideSplash() {
-    const spl = document.getElementById('splash');
-    if (spl) {
-        spl.style.opacity = '0';
-        setTimeout(() => spl.style.display = 'none', 1000);
+        console.error('Channel Fetch ERROR:', error);
+        showToast('Stream Server Unreachable', 'error');
     }
 }
 
@@ -173,8 +143,8 @@ async function verifyOTP() {
             authOverlay.style.display = 'none';
             switchPage('home');
             updateUIWithUser();
-            fetchMovies();
-            showToast("Welcome back to MX Player!");
+            fetchChannels();
+            showToast("Welcome back to Live+!");
         }
     } catch (err) {
         showToast(err.message, 'error');
@@ -217,7 +187,7 @@ async function finishSetup() {
         authOverlay.style.display = 'none';
         switchPage('home');
         updateUIWithUser();
-        fetchMovies();
+        fetchChannels();
         showToast("Profile set up successfully!");
     } catch (e) {
         showToast("Could not save profile");
@@ -231,8 +201,7 @@ function backToEmail() {
 
 function updateUIWithUser() {
     if (!currentUser) return;
-    const w = document.getElementById('welcome-text');
-    if (w) w.innerText = `Welcome back, ${currentUser.name}`;
+    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
     document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;
@@ -283,54 +252,6 @@ async function saveProfile() {
     }
 }
 
-// --- NAVIGATION & CATEGORIES ---
-
-function openDrawer() {
-    document.getElementById('side-drawer').classList.remove('-translate-x-full');
-    document.getElementById('drawer-overlay').classList.remove('hidden');
-}
-
-function closeDrawer() {
-    document.getElementById('side-drawer').classList.add('-translate-x-full');
-    document.getElementById('drawer-overlay').classList.add('hidden');
-}
-
-function renderGenres() {
-    const container = document.getElementById('genre-scroll');
-    if (!container) return;
-    container.innerHTML = '';
-    genres.forEach(g => {
-        const chip = document.createElement('button');
-        chip.className = `flex-shrink-0 px-6 py-2.5 rounded-full border border-white/10 glass text-[10px] font-black uppercase tracking-[2px] transition active:scale-95 ${g === 'All' ? 'bg-blue-600 border-blue-500' : ''}`;
-        chip.textContent = g;
-        chip.onclick = (e) => {
-            container.querySelectorAll('button').forEach(b => b.classList.remove('bg-blue-600', 'border-blue-500'));
-            chip.classList.add('bg-blue-600', 'border-blue-500');
-            filterByGenre(g);
-        };
-        container.appendChild(chip);
-    });
-}
-
-function startHeroAutoSlide() {
-    if (heroInterval) clearInterval(heroInterval);
-    heroInterval = setInterval(() => {
-        currentHeroIndex = (currentHeroIndex + 1) % trendingMovies.length;
-        renderHome(true); // true means hero only
-    }, 8000);
-}
-
-function filterByGenre(genre) {
-    if (genre === 'All') {
-        renderHome();
-        return;
-    }
-    // Simple filter for the rails (demonstration)
-    const filtered = movies.filter(m => m.genres.some(g => g.toLowerCase().includes(genre.toLowerCase())));
-    const trendingRail = document.getElementById('trending-rail');
-    renderRail(trendingRail, filtered.slice(0, 15));
-}
-
 function changeAvatar() {
     const newAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`;
     currentUser.avatar = newAvatar;
@@ -339,134 +260,84 @@ function changeAvatar() {
 
 // --- RENDERING ---
 
-function renderHome(heroOnly = false) {
-    const hero = document.getElementById('hero-banner');
-    const trendingRail = document.getElementById('trending-rail');
-    const popularRail = document.getElementById('popular-rail');
-    const showsRail = document.getElementById('shows-rail');
-    const ratedRail = document.getElementById('rated-rail');
+function renderHome() {
+    const grid = document.getElementById('featured-grid');
+    if (!grid || !channels.length) return;
     
-    if (!hero || !trendingRail) return;
-
-    // 1. Render Hero Banner
-    const heroMovie = trendingMovies[currentHeroIndex] || movies[0];
-    if (heroMovie) {
-        hero.innerHTML = `
-            <div class="absolute inset-0 animate-in fade-in duration-1000">
-                <img src="${heroMovie.image}" class="w-full h-full object-cover">
-                <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent"></div>
-                <div class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#050505] to-transparent"></div>
-                <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent"></div>
-                <div class="absolute bottom-16 left-6 right-6 sm:left-12 space-y-4 max-w-2xl px-2">
-                    <div class="flex items-center space-x-3">
-                        <span class="px-3 py-1 bg-blue-600 text-[9px] font-black uppercase rounded-lg shadow-xl shadow-blue-500/20">MX Premier</span>
-                        <span class="text-white/60 text-[10px] font-black uppercase tracking-widest">${heroMovie.genres.join(' &bull; ')}</span>
-                    </div>
-                    <h1 class="text-4xl sm:text-6xl font-black tracking-tighter text-gradient leading-[0.9]">${heroMovie.name}</h1>
-                    <p class="text-white/40 text-xs sm:text-sm line-clamp-2 max-w-lg mb-4 leading-relaxed">${heroMovie.summary}</p>
-                    <div class="flex items-center space-x-4 pt-4">
-                        <button onclick='openPlayer(${JSON.stringify(heroMovie)})' class="px-10 py-4 bg-white text-black rounded-2xl font-black flex items-center space-x-3 hover:scale-105 active:scale-95 transition-all shadow-2xl">
-                            <i data-lucide="play" class="w-5 h-5 fill-black"></i>
-                            <span class="uppercase tracking-widest text-xs">Watch Now</span>
-                        </button>
-                    </div>
-                </div>
+    grid.innerHTML = '';
+    // Show top 32 channels on Home as "Discover"
+    channels.slice(0, 32).forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'channel-card glass p-4 flex items-center space-x-4 active:scale-95 transition cursor-pointer border border-white/5 relative overflow-hidden group';
+        card.innerHTML = `
+            <div class="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition"></div>
+            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5 relative z-10" onerror="this.src='/static/icon-192.png'">
+            <div class="flex-grow min-w-0 relative z-10">
+                <h4 class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</h4>
+                <p class="text-[9px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${c.group}</p>
             </div>
-            <!-- Progress Dots -->
-            <div class="absolute bottom-6 right-12 flex space-x-2">
-                ${trendingMovies.map((_, i) => `<div class="w-1.5 h-1.5 rounded-full transition-all duration-500 ${i === currentHeroIndex ? 'bg-blue-500 w-8' : 'bg-white/20'}"></div>`).join('')}
-            </div>
+            <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="relative z-20 p-2 text-white/20 hover:text-red-500 transition">
+                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            </button>
         `;
-    }
-    
-    if (heroOnly) {
-        lucide.createIcons();
-        return;
-    }
-
-    // 2. Render Rails
-    renderRail(trendingRail, trendingMovies);
-    renderRail(popularRail, popularMovies);
-    renderRail(showsRail, popularShows);
-    renderRail(ratedRail, topMovies);
-    
+        card.onclick = () => openPlayer(c);
+        grid.appendChild(card);
+    });
     lucide.createIcons();
 }
 
-function renderRail(container, list) {
-    if (!container || !list) return;
-    container.innerHTML = '';
-    list.forEach(m => {
-        const card = document.createElement('div');
-        card.className = 'flex-shrink-0 w-48 group cursor-pointer space-y-3';
-        card.innerHTML = `
-            <div class="relative aspect-[2/3] rounded-[32px] overflow-hidden glass shadow-2xl">
-                <img src="${m.logo}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700">
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-sm">
-                    <div class="w-14 h-14 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-2xl scale-50 group-hover:scale-100 transition duration-500">
-                        <i data-lucide="play" class="w-6 h-6 fill-blue-600 ml-1"></i>
-                    </div>
-                </div>
-                <div class="absolute top-4 right-4 bg-black/40 backdrop-blur px-2 py-1 rounded-lg text-[10px] font-bold border border-white/10">
-                    ★ ${m.rating}
-                </div>
-            </div>
-            <div class="px-2">
-                <h4 class="font-bold text-sm truncate uppercase tracking-tight">${m.name}</h4>
-                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">${m.year} &bull; ${m.genres[0]}</p>
-            </div>
-        `;
-        card.onclick = () => openPlayer(m);
-        container.appendChild(card);
-    });
-}
-
-function renderExplore(list = movies) {
+function renderExplore(list = channels) {
     const listContainer = document.getElementById('all-channels-list');
     if (!listContainer) return;
     
     listContainer.innerHTML = '';
-    list.forEach(m => {
+    // Show ALL channels in Explore
+    list.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-2 rounded-[32px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
+        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
         item.innerHTML = `
-            <div class="relative w-20 h-28 flex-shrink-0">
-                <img src="${m.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
+            <div class="relative w-12 h-12 flex-shrink-0">
+                <img src="${c.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full shadow-lg"></div>
             </div>
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-black text-lg truncate uppercase tracking-tight text-white/90">${m.name}</span>
-                <span class="text-[10px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${m.genres.join(', ')}</span>
-                <span class="text-blue-500 font-bold text-xs mt-2 italic">${m.year} &bull; Rating: ${m.rating}</span>
+                <span class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</span>
+                <span class="text-[9px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${c.group}</span>
             </div>
-            <div class="pr-6">
-                <button onclick="event.stopPropagation(); toggleFavorite(event, '${m.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-full">
-                    <i data-lucide="heart" class="w-5 h-5 ${isFavorite(m.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            <div class="flex items-center space-x-2">
+                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl opacity-40 hover:opacity-100 transition">
+                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
                 </button>
+                <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600/30 transition">
+                    <i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i>
+                </div>
             </div>
         `;
-        item.onclick = () => openPlayer(m);
+        item.onclick = () => openPlayer(c);
         listContainer.appendChild(item);
     });
     lucide.createIcons();
 }
 
-function openPlayer(movie) {
-    // For a YTS site, we show details since direct streaming is complex
-    showToast(`Streaming ${movie.name}...`, 'info');
+// --- PLAYER LOGIC ---
+
+function openPlayer(channel) {
     playerView.style.display = 'block';
-    const pn = document.getElementById('player-movie-name');
-    if (pn) pn.textContent = movie.name;
+    document.getElementById('player-channel-name').textContent = channel.name;
     
-    // We could potentially use a peer-to-peer or third party player here
-    // But for this GUI task, we just show a backdrop and info
-    video.poster = movie.image;
-    video.src = '';
-    
-    const controls = document.getElementById('controls');
-    // Hide seeker for now as it's a showcase
-    showToast("Press Play to watch Trailer (Simulated)", "info");
-    
-    addToRecent(movie);
+    // Feature: Add to Recent
+    addToRecent(channel);
+
+    if (Hls.isSupported()) {
+        if (hls) hls.destroy();
+        hls = new Hls();
+        hls.loadSource(channel.url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play(); updatePlayIcon(true); });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = channel.url;
+        video.onloadedmetadata = () => { video.play(); updatePlayIcon(true); };
+    }
     resetControlsTimer();
 }
 
@@ -578,29 +449,29 @@ globalSearch.oninput = (e) => {
     const q = e.target.value.toLowerCase();
     if (!q) { searchResults.innerHTML = ''; return; }
     
-    const res = movies.filter(m => m.name.toLowerCase().includes(q) || m.genres.some(g => g.toLowerCase().includes(q))).slice(0, 30);
+    const res = channels.filter(c => c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 30);
     searchResults.innerHTML = '';
-    res.forEach(m => {
+    res.forEach(c => {
         const item = document.createElement('div');
         item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 active:scale-95 transition';
         item.innerHTML = `
-            <img src="${m.logo}" class="w-12 h-16 rounded-lg object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
+            <img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-base truncate">${m.name}</span>
-                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">${m.year}</span>
+                <span class="font-bold text-base truncate">${c.name}</span>
+                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">${c.group}</span>
             </div>
             <div class="p-3"><i data-lucide="play" class="w-5 h-5 text-white/20"></i></div>
         `;
-        item.onclick = () => { openPlayer(m); toggleSearch(); };
+        item.onclick = () => { openPlayer(c); toggleSearch(); };
         searchResults.appendChild(item);
     });
     lucide.createIcons();
 };
 
-function filterByGroup(genre) {
-    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent.includes(genre)));
+function filterByGroup(group) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent.includes(group)));
     switchPage('explore');
-    renderExplore(genre === 'All' ? movies : movies.filter(m => m.genres.includes(genre)));
+    renderExplore(group === 'All' ? channels : channels.filter(c => c.group.includes(group) || c.name.includes(group)));
 }
 
 // --- FAVORITES ---
@@ -618,13 +489,13 @@ function isFavorite(name) { return (JSON.parse(localStorage.getItem('favs') || '
 
 function renderFavorites() {
     const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-    const list = movies.filter(m => favs.includes(m.name));
-    favoritesList.innerHTML = list.length === 0 ? '<p class="text-center py-20 opacity-20">Empty Movies Library</p>' : '';
-    list.forEach(m => {
+    const list = channels.filter(c => favs.includes(c.name));
+    favoritesList.innerHTML = list.length === 0 ? '<p class="text-center py-20 opacity-20">Empty Library</p>' : '';
+    list.forEach(c => {
         const item = document.createElement('div');
         item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4';
-        item.innerHTML = `<img src="${m.logo}" class="w-12 h-16 rounded-lg object-cover"><div class="flex-grow font-bold">${m.name}</div><i data-lucide="heart" class="fill-red-500 text-red-500 w-5 h-5"></i>`;
-        item.onclick = () => openPlayer(m);
+        item.innerHTML = `<img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover"><div class="flex-grow font-bold">${c.name}</div><i data-lucide="heart" class="fill-red-500 text-red-500 w-5 h-5"></i>`;
+        item.onclick = () => openPlayer(c);
         favoritesList.appendChild(item);
     });
     lucide.createIcons();
@@ -725,7 +596,7 @@ async function init() {
         authOverlay.style.display = 'none';
         switchPage('home');
         updateUIWithUser();
-        fetchMovies();
+        fetchChannels();
     }
     
     // Add keyboard support for forms

@@ -1,7 +1,7 @@
 {
-  "name": "MX Player Gold",
-  "short_name": "MX Gold",
-  "description": "Everytainment on your fingertips. Watch movies, originals, and discover content at high-speed.",
+  "name": "LivePlus Premium",
+  "short_name": "Live+",
+  "description": "High-Definition IPTV streaming at your fingertips. Full-screen, PiP, and personalized profiles.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

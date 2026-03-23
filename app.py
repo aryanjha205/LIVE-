@@ -46,27 +46,31 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-# Movie & Show API Sources
-MOVIE_API_URL = "https://yts.mx/api/v2/list_movies.json"
-SHOWS_API_URL = "https://api.tvmaze.com/shows"
+PLAYLIST_URL = "https://iptv-org.github.io/iptv/index.m3u"
 
-# Helper: Filter Movies
-def clean_movie_data(movie_list):
-    cleaned = []
-    for m in movie_list:
-        cleaned.append({
-            "id": m.get("id"),
-            "name": m.get("title_english") or m.get("title"),
-            "logo": m.get("large_cover_image") or m.get("medium_cover_image"),
-            "image": m.get("background_image_original") or m.get("large_cover_image"),
-            "rating": m.get("rating", "N/A"),
-            "year": m.get("year"),
-            "genres": m.get("genres", ["Movie"]),
-            "summary": m.get("summary", "No description available."),
-            "url": m.get("url"), # Link to YTS for details
-            "type": "movie"
-        })
-    return cleaned
+# Helper: Parse M3U
+def parse_m3u(file_content):
+    channels = []
+    current_channel = {}
+    extinf_re = re.compile(r'#EXTINF:(-?\d+)(.*),(.*)')
+    logo_re = re.compile(r'tvg-logo="([^"]+)"')
+    group_re = re.compile(r'group-title="([^"]+)"')
+    lines = file_content.splitlines()
+    for i in range(len(lines)):
+        line = lines[i].strip()
+        if line.startswith("#EXTINF:"):
+            match = extinf_re.match(line)
+            if match:
+                current_channel["name"] = match.group(3).strip()
+                logo_match = logo_re.search(line)
+                current_channel["logo"] = logo_match.group(1) if logo_match else ""
+                group_match = group_re.search(line)
+                current_channel["group"] = group_match.group(1) if group_match else "General"
+        elif line.startswith("http"):
+            current_channel["url"] = line
+            channels.append(current_channel)
+            current_channel = {}
+    return channels
 
 # --- AUTH ROUTES ---
 
@@ -195,93 +199,28 @@ def index():
 def favicon():
     return app.send_static_file('icon-192.png')
 
-@app.route('/api/movies/popular')
-def get_popular_movies():
+@app.route('/api/channels')
+def get_channels():
     try:
-        limit = request.args.get('limit', 15)
-        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=download_count", timeout=15)
-        data = response.json()
-        movies = data.get("data", {}).get("movies", [])
-        return jsonify(clean_movie_data(movies))
-    except Exception as e:
-        return jsonify([])
-
-@app.route('/api/movies/latest')
-def get_latest_movies():
-    try:
-        limit = request.args.get('limit', 15)
-        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=year", timeout=15)
-        data = response.json()
-        movies = data.get("data", {}).get("movies", [])
-        return jsonify(clean_movie_data(movies))
-    except Exception as e:
-        return jsonify([])
-
-@app.route('/api/movies/rating')
-def get_rated_movies():
-    try:
-        limit = request.args.get('limit', 15)
-        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=rating", timeout=15)
-        data = response.json()
-        movies = data.get("data", {}).get("movies", [])
-        return jsonify(clean_movie_data(movies))
-    except Exception as e:
-        return jsonify([])
-
-@app.route('/api/movies')
-def get_movies():
-    try:
-        limit = request.args.get('limit', 30)
-        page = request.args.get('page', 1)
-        sort = request.args.get('sort', 'seeds')
-        
-        query_url = f"{MOVIE_API_URL}?limit={limit}&page={page}&sort_by={sort}"
-        response = requests.get(query_url, timeout=15)
-        
+        # Check if we can use a smaller playlist or limit the current one
+        # The main playlist is huge; we try to fetch it but limit processing
+        response = requests.get(PLAYLIST_URL, timeout=15)
         if not response.ok:
-            return jsonify({"error": "Movie provider error"}), 502
+            print(f"IPTV FETCH FAILED: {response.status_code}")
+            return jsonify({"error": f"IPTV provider error: {response.status_code}"}), 502
             
-        data = response.json()
-        movies = data.get("data", {}).get("movies", [])
-        return jsonify(clean_movie_data(movies))
+        # Optimization: only parse first 1000 lines if it's too large, or handle with care
+        # For now, let's parse and return first 500 channels for performance
+        channels = parse_m3u(response.text)
+        
+        if not channels:
+            return jsonify([{"name": "No Channels Found", "group": "Info", "url": "", "logo": ""}])
+            
+        # Return a manageable amount for mobile apps
+        return jsonify(channels[:500])
     except Exception as e:
         print(f"FETCH ERROR: {e}")
-        return jsonify({"error": f"Failed to load movies: {str(e)}"}), 500
-
-@app.route('/api/discover')
-def get_discover():
-    try:
-        # Hero Banner Content
-        response = requests.get(f"{MOVIE_API_URL}?limit=5&sort_by=like_count", timeout=10)
-        data = response.json()
-        movies = data.get("data", {}).get("movies", [])
-        return jsonify(clean_movie_data(movies))
-    except Exception as e:
-        print(f"DISCOVER ERROR: {e}")
-        return jsonify([])
-
-@app.route('/api/shows/popular')
-def get_popular_shows():
-    try:
-        # TVMaze public trending/shows
-        response = requests.get(f"{SHOWS_API_URL}?page=0", timeout=10)
-        shows = response.json()
-        cleaned = []
-        for s in shows[:15]:
-            cleaned.append({
-                "id": s.get("id"),
-                "name": s.get("name"),
-                "logo": (s.get("image") or {}).get("medium", ""),
-                "image": (s.get("image") or {}).get("original", ""),
-                "rating": (s.get("rating") or {}).get("average", "N/A"),
-                "year": (s.get("premiered") or "N/A")[:4],
-                "genres": s.get("genres", []),
-                "summary": s.get("summary", "").replace("<p>", "").replace("</p>", "").replace("<b>", "").replace("</b>", ""),
-                "type": "show"
-            })
-        return jsonify(cleaned)
-    except Exception as e:
-        return jsonify([])
+        return jsonify({"error": f"Failed to load IPTV list: {str(e)}"}), 500
 
 @app.route('/service-worker.js')
 def sw():
