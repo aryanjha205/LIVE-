@@ -9,6 +9,7 @@ const allChannelsList = document.getElementById('all-channels-list');
 const favoritesList = document.getElementById('favorites-list');
 const searchResults = document.getElementById('search-results');
 const globalSearch = document.getElementById('global-search');
+const playerLoader = document.getElementById('player-loader');
 const searchModal = document.getElementById('search-modal');
 
 // Auth elements
@@ -34,8 +35,11 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 
 
 
-async function fetchChannels() {
-    console.log("Fetching channels...");
+async function fetchChannels(retryCount = 0) {
+    console.log(`Fetching channels (Attempt ${retryCount + 1})...`);
+    const loadingElem = document.getElementById('category-rows');
+    if (loadingElem && retryCount === 0) loadingElem.innerHTML = '<div class="py-20 text-center opacity-40"><div class="premium-loader mx-auto mb-6"></div><p class="text-[10px] font-bold uppercase tracking-[4px]">Initializing Premium Experience...</p></div>';
+    
     try {
         const response = await fetch('/api/channels');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -43,17 +47,30 @@ async function fetchChannels() {
         channels = await response.json();
         console.log(`Loaded ${channels.length} channels.`);
         
-        if (channels.length === 0) {
-            showToast('No channels available', 'info');
+        if (!channels || channels.length === 0 || channels[0].name === "Server Maintenance") {
+             if (retryCount < 2) {
+                 setTimeout(() => fetchChannels(retryCount + 1), 3000);
+                 return;
+             }
+             showToast('Service update in progress. Please refresh.', 'info');
         }
         
         renderHome();
         renderExplore();
         renderFavorites();
         renderRecent();
+        
+        // Hide auth if already logged in
+        if (currentUser) {
+            authOverlay.style.display = 'none';
+        }
     } catch (error) {
         console.error('Channel Fetch ERROR:', error);
-        showToast('Stream Server Unreachable', 'error');
+        if (retryCount < 2) {
+             setTimeout(() => fetchChannels(retryCount + 1), 5000);
+             return;
+        }
+        showToast('Connection unstable. Retrying...', 'error');
     }
 }
 
@@ -201,7 +218,6 @@ function backToEmail() {
 
 function updateUIWithUser() {
     if (!currentUser) return;
-    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
     document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;
@@ -261,29 +277,89 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    const grid = document.getElementById('featured-grid');
-    if (!grid || !channels.length) return;
+    const container = document.getElementById('category-rows');
+    if (!container || !channels.length) return;
+    container.innerHTML = '';
     
-    grid.innerHTML = '';
-    // Show top 32 channels on Home as "Discover"
-    channels.slice(0, 32).forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'channel-card glass p-4 flex items-center space-x-4 active:scale-95 transition cursor-pointer border border-white/5 relative overflow-hidden group';
-        card.innerHTML = `
-            <div class="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition"></div>
-            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5 relative z-10" onerror="this.src='/static/icon-192.png'">
-            <div class="flex-grow min-w-0 relative z-10">
-                <h4 class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</h4>
-                <p class="text-[9px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${c.group}</p>
-            </div>
-            <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="relative z-20 p-2 text-white/20 hover:text-red-500 transition">
-                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
-            </button>
-        `;
-        card.onclick = () => openPlayer(c);
-        grid.appendChild(card);
+    // 1. Recently Watched
+    renderRecent(); // This now updates #recent-section
+
+    // 2. Intelligent Categorization
+    const categoryMap = {
+        'News': ['News', 'Local News', 'Live News', 'Hindi News', 'English News'],
+        'Movies': ['Movies', 'Cinema', 'Hindi Movies', 'English Movies', 'South Movies'],
+        'Sports': ['Sports', 'Cricket', 'Live Sports'],
+        'Music': ['Music', 'Bollywood Music', 'Classical Music'],
+        'Entertainment': ['Entertainment', 'GEC', 'Series', 'General'],
+        'Kids': ['Kids', 'Animation', 'Cartoon'],
+        'Religious': ['Religious', 'Spiritual', 'Devotional']
+    };
+
+    const categories = {};
+    channels.forEach(ch => {
+        let group = ch.group || 'General';
+        // Normalize group
+        for (const [key, aliases] of Object.entries(categoryMap)) {
+            if (aliases.some(a => group.includes(a))) {
+                group = key;
+                break;
+            }
+        }
+        if (!categories[group]) categories[group] = [];
+        categories[group].push(ch);
     });
-    lucide.createIcons();
+
+    // Priority Order for categories
+    const priority = ['News', 'Movies', 'Sports', 'Entertainment', 'Music', 'Kids', 'Religious'];
+    
+    // Sort & Render
+    [...priority, ...Object.keys(categories).filter(k => !priority.includes(k))]
+        .filter(cat => categories[cat] && categories[cat].length > 0)
+        .slice(0, 10)
+        .forEach(catName => {
+            container.appendChild(createCategoryRow(catName, categories[catName].slice(0, 30)));
+        });
+}
+
+function createCategoryRow(title, itemArray) {
+    const row = document.createElement('div');
+    row.className = 'space-y-6';
+    row.innerHTML = `
+        <div class="flex items-center justify-between px-1">
+            <h3 class="text-xl font-black text-white/90 tracking-tight">${title}</h3>
+            <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-bold uppercase tracking-[3px] cursor-pointer hover:underline">View All</span>
+        </div>
+        <div class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar snap-x snap-mandatory" id="row-${title.replace(/\s+/g, '-')}">
+            <!-- Items added via JS for safety -->
+        </div>
+    `;
+    
+    const slider = row.querySelector('.no-scrollbar');
+    itemArray.forEach(ch => {
+        const item = document.createElement('div');
+        item.className = 'min-w-[280px] sm:min-w-[340px] snap-start py-4';
+        item.onclick = () => openPlayer(ch);
+        item.innerHTML = `
+            <div class="channel-card glass border-white/[0.03] group p-6 hover:border-indigo-500/30">
+                <div class="flex items-center space-x-6 relative z-10">
+                    <div class="w-20 h-20 rounded-[28px] bg-white/[0.03] p-4 flex items-center justify-center border border-white/5 group-hover:border-indigo-500/20 group-hover:bg-white/[0.05] transition-all duration-500 shadow-xl">
+                        <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <p class="text-[9px] text-indigo-400 font-black uppercase tracking-[3px] mb-1.5">${ch.group}</p>
+                        <h4 class="text-white font-black text-lg truncate tracking-tight group-hover:text-indigo-100 transition-colors uppercase italic">${ch.name}</h4>
+                    </div>
+                </div>
+                <div class="absolute right-6 bottom-6 w-12 h-12 rounded-2xl mx-gradient flex items-center justify-center shadow-lg transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                    <i data-lucide="play" class="w-6 h-6 text-white fill-white ml-1"></i>
+                </div>
+            </div>
+        `;
+        slider.appendChild(item);
+    });
+    
+    lucide.createIcons({ scope: row });
+    return row;
 }
 
 function renderExplore(list = channels) {
@@ -294,22 +370,22 @@ function renderExplore(list = channels) {
     // Show ALL channels in Explore
     list.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
+        item.className = 'glass p-6 rounded-[32px] flex items-center space-x-5 shadow-lg hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer border border-white/[0.03] group relative overflow-hidden';
         item.innerHTML = `
-            <div class="relative w-12 h-12 flex-shrink-0">
-                <img src="${c.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
-                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full shadow-lg"></div>
+            <div class="relative w-14 h-14 flex-shrink-0">
+                <img src="${c.logo}" class="w-full h-full rounded-[20px] object-contain bg-white/5 border border-white/5 shadow-inner" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-black rounded-full shadow-lg"></div>
             </div>
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</span>
-                <span class="text-[9px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${c.group}</span>
+                <span class="font-black text-md truncate uppercase tracking-tight text-white/90 group-hover:text-indigo-300 transition-colors">${c.name}</span>
+                <span class="text-[10px] text-indigo-400/60 font-black uppercase tracking-[3px] mt-1">${c.group}</span>
             </div>
-            <div class="flex items-center space-x-2">
-                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl opacity-40 hover:opacity-100 transition">
-                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            <div class="flex items-center space-x-3">
+                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl border-white/5 hover:border-red-500/20 transition-all">
+                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : 'text-white/20'}"></i>
                 </button>
-                <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600/30 transition">
-                    <i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i>
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover:bg-indigo-500 group-hover:border-transparent transition-all shadow-indigo-500/20 group-hover:shadow-lg">
+                    <i data-lucide="play" class="w-5 h-5 text-indigo-400 fill-indigo-400 group-hover:text-white group-hover:fill-white transition-all ml-1"></i>
                 </div>
             </div>
         `;
@@ -322,21 +398,70 @@ function renderExplore(list = channels) {
 // --- PLAYER LOGIC ---
 
 function openPlayer(channel) {
+    if (!channel || !channel.url) {
+        showToast("Stream URL not found", "error");
+        return;
+    }
+    
+    // Fix: Add a CORS Proxy for public m3u8 links that often block referrers
+    const finalUrl = `https://corsproxy.io/?${encodeURIComponent(channel.url)}`;
+    
     playerView.style.display = 'block';
+    playerLoader.classList.remove('hidden');
     document.getElementById('player-channel-name').textContent = channel.name;
     
     // Feature: Add to Recent
     addToRecent(channel);
 
+    const playStream = () => {
+        console.log("Stream successfully parsed and starting playback");
+        playerLoader.classList.add('hidden');
+        video.play().catch(e => {
+            console.warn("Autoplay blocked or failed:", e);
+            updatePlayIcon(false);
+        });
+        updatePlayIcon(true);
+    };
+
     if (Hls.isSupported()) {
+        console.log("Initializing HLS for:", finalUrl);
         if (hls) hls.destroy();
-        hls = new Hls();
-        hls.loadSource(channel.url);
+        hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 60
+        });
+        hls.loadSource(finalUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play(); updatePlayIcon(true); });
+        hls.on(Hls.Events.MANIFEST_PARSED, playStream);
+        hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+                console.error("HLS Fatal Error:", data);
+                playerLoader.classList.add('hidden');
+                showToast("Stream Error: Verify Connection", "error");
+                switch(data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        hls.destroy();
+                        break;
+                }
+            }
+        });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = channel.url;
-        video.onloadedmetadata = () => { video.play(); updatePlayIcon(true); };
+        video.src = finalUrl;
+        video.onloadedmetadata = playStream;
+        video.onerror = () => {
+            playerLoader.classList.add('hidden');
+            showToast("Native Player Error", "error");
+        };
+    } else {
+        playerLoader.classList.add('hidden');
+        showToast("Your browser does not support HLS", "error");
     }
     resetControlsTimer();
 }
@@ -504,16 +629,21 @@ function renderFavorites() {
 // --- NEW FEATURES ---
 
 function addToRecent(channel) {
-    let recents = JSON.parse(localStorage.getItem('recents') || '[]');
-    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 5);
-    localStorage.setItem('recents', JSON.stringify(recents));
+    let recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
+    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 8);
+    localStorage.setItem('recent_channels', JSON.stringify(recents));
     renderRecent();
+    // Also re-render home to keep it synced
+    renderHome();
 }
 
 function renderRecent() {
     const section = document.getElementById('recent-section');
     const scroll = document.getElementById('recent-scroll');
-    const recents = JSON.parse(localStorage.getItem('recents') || '[]');
+    if (!section || !scroll) return;
+    
+    // Use 'recent_channels' consistently with renderHome
+    const recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
     
     if (recents.length === 0) {
         section.classList.add('hidden');
@@ -521,14 +651,21 @@ function renderRecent() {
     }
     
     section.classList.remove('hidden');
-    scroll.innerHTML = recents.map(c => `
-        <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-20 text-center space-y-2">
-            <div class="w-16 h-16 rounded-2xl glass p-1 mx-auto overflow-hidden">
-                <img src="${c.logo}" class="w-full h-full object-cover rounded-xl" onerror="this.src='/static/icon-192.png'">
+    scroll.innerHTML = '';
+    
+    recents.forEach((c, idx) => {
+        const item = document.createElement('div');
+        item.className = 'flex-shrink-0 w-24 text-center space-y-3 cursor-pointer group';
+        item.innerHTML = `
+            <div class="w-20 h-20 rounded-[28px] glass p-1 mx-auto overflow-hidden relative border-white/5 group-hover:border-indigo-500/40 group-hover:scale-105 transition-all duration-500 active:scale-95 shadow-xl">
+                <img src="${c.logo}" class="w-full h-full object-contain rounded-[24px] bg-white/[0.02]" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </div>
-            <p class="text-[10px] font-bold truncate opacity-60">${c.name}</p>
-        </div>
-    `).join('');
+            <p class="text-[10px] font-black uppercase italic tracking-tighter text-white/40 group-hover:text-white transition-colors px-1 truncate">${c.name}</p>
+        `;
+        item.onclick = () => openPlayer(c);
+        scroll.appendChild(item);
+    });
 }
 
 function copyShareLink() {
@@ -558,10 +695,12 @@ function showToast(msg, type='info') {
     const t = document.getElementById('global-toast');
     t.innerText = msg;
     t.style.opacity = '1';
-    t.style.top = '10%';
+    t.style.top = '12%';
+    t.style.transform = 'translateX(-50%) translateY(0)';
     setTimeout(() => {
         t.style.opacity = '0';
-        t.style.top = '8%';
+        t.style.top = '10%';
+        t.style.transform = 'translateX(-50%) translateY(-10px)';
     }, 3000);
 }
 
