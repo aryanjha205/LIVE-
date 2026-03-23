@@ -143,11 +143,14 @@ def verify_otp():
             return jsonify({"error": "OTP expired"}), 400
         
         user = users_col.find_one({"_id": email})
+        is_new_user = False
         if not user:
+            is_new_user = True
             user = {
                 "_id": email,
                 "name": email.split('@')[0],
                 "bio": "Watching Live+",
+                "age": "",
                 "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={email}",
                 "favs": [],
                 "created_at": datetime.datetime.utcnow()
@@ -158,10 +161,12 @@ def verify_otp():
         
         return jsonify({
             "message": "Login successful",
+            "is_new_user": is_new_user,
             "user": {
                 "name": user.get('name', 'User'),
                 "email": user.get('_id', email),
                 "bio": user.get('bio', ''),
+                "age": user.get('age', ''),
                 "avatar": user.get('avatar', f"https://api.dicebear.com/7.x/avataaars/svg?seed={email}")
             }
         })
@@ -178,6 +183,7 @@ def update_profile():
     update_data = {
         "name": data.get('name'),
         "bio": data.get('bio'),
+        "age": data.get('age'),
         "avatar": data.get('avatar')
     }
     users_col.update_one({"_id": email}, {"$set": update_data})

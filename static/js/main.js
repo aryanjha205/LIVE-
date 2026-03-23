@@ -124,17 +124,64 @@ async function verifyOTP() {
         currentUser = data.user;
         localStorage.setItem('user', JSON.stringify(currentUser));
         
-        // Use explicit style to override CSS specificity
-        authOverlay.style.display = 'none';
-        
-        switchPage('home'); // Explicitly show home page
-        updateUIWithUser();
-        fetchChannels();
-        showToast("Welcome to Live+!");
+        if (data.is_new_user) {
+            // Start Step-by-Step Onboarding
+            authStep2.classList.add('hidden');
+            document.getElementById('auth-step-name').classList.remove('hidden');
+            showToast("Welcome! Let's set up your profile.");
+        } else {
+            // Regular Login
+            authOverlay.style.display = 'none';
+            switchPage('home');
+            updateUIWithUser();
+            fetchChannels();
+            showToast("Welcome back to Live+!");
+        }
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
         document.getElementById('verify-otp-btn').innerText = "Verify & Login";
+    }
+}
+
+function nextSetupStep(step) {
+    if (step === 'age') {
+        const name = document.getElementById('setup-name').value.trim();
+        if (!name) return showToast("Please enter your name");
+        currentUser.name = name;
+        document.getElementById('auth-step-name').classList.add('hidden');
+        document.getElementById('auth-step-age').classList.remove('hidden');
+    }
+}
+
+async function finishSetup() {
+    const age = document.getElementById('setup-age').value;
+    if (!age) return showToast("Please enter your age");
+    currentUser.age = age;
+    
+    document.getElementById('verify-otp-btn').innerText = "Finalizing...";
+    
+    try {
+        await fetch('/api/profile/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                email: currentUser.email,
+                name: currentUser.name,
+                bio: currentUser.bio,
+                age: currentUser.age,
+                avatar: currentUser.avatar
+            })
+        });
+        
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        authOverlay.style.display = 'none';
+        switchPage('home');
+        updateUIWithUser();
+        fetchChannels();
+        showToast("Profile set up successfully!");
+    } catch (e) {
+        showToast("Could not save profile");
     }
 }
 
@@ -148,10 +195,12 @@ function updateUIWithUser() {
     document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
+    document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;
     document.getElementById('user-avatar-small').src = currentUser.avatar;
     document.getElementById('user-avatar-large').src = currentUser.avatar;
     document.getElementById('edit-name').value = currentUser.name;
     document.getElementById('edit-bio').value = currentUser.bio || "";
+    document.getElementById('edit-age').value = currentUser.age || "";
 }
 
 function logout() {
@@ -168,6 +217,7 @@ function toggleEditProfile() {
 async function saveProfile() {
     const name = document.getElementById('edit-name').value;
     const bio = document.getElementById('edit-bio').value;
+    const age = document.getElementById('edit-age').value;
     
     try {
         const res = await fetch('/api/profile/update', {
@@ -177,11 +227,13 @@ async function saveProfile() {
                 email: currentUser.email,
                 name: name,
                 bio: bio,
+                age: age,
                 avatar: currentUser.avatar
             })
         });
         currentUser.name = name;
         currentUser.bio = bio;
+        currentUser.age = age;
         localStorage.setItem('user', JSON.stringify(currentUser));
         updateUIWithUser();
         toggleEditProfile();
@@ -281,6 +333,10 @@ function updatePlayIcon(isPlaying) {
     lucide.createIcons();
 }
 
+// Add these listeners at end of file after DOM elements are defined
+video.onclick = togglePlay;
+document.getElementById('play-pause-btn').onclick = togglePlay;
+
 function toggleLock() {
     isLocked = !isLocked;
     document.getElementById('lock-icon').setAttribute('data-lucide', isLocked ? 'lock' : 'unlock');
@@ -307,6 +363,11 @@ playerView.addEventListener('touchstart', (e) => {
     if (isLocked) return;
     startY = e.touches[0].clientY;
     isRightSide = e.touches[0].clientX > window.innerWidth / 2;
+    resetControlsTimer();
+});
+
+playerView.addEventListener('mousemove', () => {
+    if (isLocked) return;
     resetControlsTimer();
 });
 
@@ -449,6 +510,18 @@ async function init() {
     // Add keyboard support for forms
     authEmail.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendOTP(); });
     otpInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') verifyOTP(); });
+
+    // PC Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        if (playerView.style.display === 'block') {
+            if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+            if (e.code === 'ArrowLeft') skip(-10);
+            if (e.code === 'ArrowRight') skip(10);
+            if (e.code === 'Escape') exitPlayer();
+            if (e.code === 'ArrowUp') { video.volume = Math.min(1, video.volume + 0.1); showToast(`Volume: ${Math.round(video.volume * 100)}%`); }
+            if (e.code === 'ArrowDown') { video.volume = Math.max(0, video.volume - 0.1); showToast(`Volume: ${Math.round(video.volume * 100)}%`); }
+        }
+    });
 }
 
 init();
