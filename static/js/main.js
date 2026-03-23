@@ -47,7 +47,6 @@ async function fetchChannels() {
             showToast('No channels available', 'info');
         }
         
-        renderCategories();
         renderHome();
         renderExplore();
         renderFavorites();
@@ -55,8 +54,6 @@ async function fetchChannels() {
     } catch (error) {
         console.error('Channel Fetch ERROR:', error);
         showToast('Stream Server Unreachable', 'error');
-        // Clear skeletons to show error
-        featuredGrid.innerHTML = `<div class="p-10 text-center opacity-30 col-span-full">Failed to load channels. Check your connection.</div>`;
     }
 }
 
@@ -264,29 +261,51 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    if (!featuredGrid) return;
-    featuredGrid.innerHTML = '';
-    
-    if (channels.length === 0) {
-        featuredGrid.innerHTML = '<div class="col-span-full text-center py-20 opacity-20 text-lg">Loading failed. Refresh app.</div>';
-        return;
-    }
+    const container = document.getElementById('category-rows');
+    if (!container || !channels.length) return;
 
-    channels.slice(0, 12).forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'glass p-5 rounded-[25px] flex items-center space-x-4 active:scale-95 transition-all shadow-lg hover:bg-white/5 border border-white/5';
-        card.innerHTML = `
-            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
-            <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-black text-sm truncate uppercase tracking-tight">${c.name}</span>
-                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px]">${c.group}</span>
+    // Grouping logic
+    const groups = channels.reduce((acc, c) => {
+        const g = c.group || 'General';
+        if (!acc[g]) acc[g] = [];
+        acc[g].push(c);
+        return acc;
+    }, {});
+
+    container.innerHTML = '';
+    
+    // Sort and render each group
+    Object.keys(groups).sort().forEach(g => {
+        const groupChannels = groups[g].slice(0, 15);
+        if (groupChannels.length < 2) return;
+
+        const row = document.createElement('div');
+        row.className = 'space-y-4 animate-in fade-in slide-in-from-bottom duration-700';
+        row.innerHTML = `
+            <div class="flex items-center justify-between px-2">
+                <h3 class="text-xl font-black text-white/90 tracking-tighter">${g}</h3>
+                <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-black uppercase tracking-[3px] border-b border-blue-500/20 pb-0.5">See All</span>
             </div>
-            <button onclick="toggleFavorite(event, '${c.name}')" class="p-3 text-white/20">
-                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
-            </button>
+            <div class="flex space-x-5 overflow-x-auto pb-6 -mx-2 px-2 no-scrollbar scroll-smooth">
+                ${groupChannels.map(c => `
+                    <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-64 aspect-video relative rounded-[36px] overflow-hidden glass group cursor-pointer border border-white/5 active:scale-95 transition-all">
+                        <img src="${c.logo}" class="w-full h-full object-cover opacity-40 group-hover:scale-110 transition duration-1000" onerror="this.src='/static/icon-192.png'">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
+                        <div class="absolute inset-x-0 bottom-0 p-6">
+                            <h4 class="text-sm font-black truncate text-white/90">${c.name}</h4>
+                            <div class="flex items-center mt-1.5 space-x-2">
+                                <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                <p class="text-[9px] text-white/30 font-bold uppercase tracking-[2px]">Online Now</p>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="absolute top-4 right-4 p-3 glass rounded-[20px] opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110">
+                            <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
         `;
-        card.onclick = () => openPlayer(c);
-        featuredGrid.appendChild(card);
+        container.appendChild(row);
     });
     lucide.createIcons();
 }

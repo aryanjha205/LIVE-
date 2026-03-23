@@ -46,22 +46,30 @@
 
         .glass {
             background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            backdrop-filter: blur(35px);
+            -webkit-backdrop-filter: blur(35px);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         .glass:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.06);
             border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
         }
 
-        .mx-gradient { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+        .mx-gradient { background: linear-gradient(135deg, #3d5afe, #00e5ff); }
         .text-gradient {
-            background: linear-gradient(135deg, #fff, var(--primary));
+            background: linear-gradient(135deg, #fff 40%, #00e5ff);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .channel-card {
+            border-radius: 28px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+            transition: all 0.4s;
         }
 
         /* Animation */
@@ -149,19 +157,20 @@
 </head>
 <body class="bg-black text-white selection:bg-blue-500/30">
 
-    <!-- Auth Overlay (Login/Signup) -->
     <div id="auth-overlay">
         <!-- Background elements for visual flair -->
-        <div class="absolute w-64 h-64 bg-blue-600/20 blur-[120px] rounded-full top-0 left-0"></div>
-        <div class="absolute w-64 h-64 bg-cyan-600/20 blur-[120px] rounded-full bottom-0 right-0"></div>
+        <div class="absolute w-[80%] aspect-square bg-[#3d5afe]/20 blur-[150px] rounded-full top-0 left-[-20%] animate-pulse"></div>
+        <div class="absolute w-[60%] aspect-square bg-[#00e5ff]/20 blur-[150px] rounded-full bottom-0 right-[-10%] animate-pulse" style="animation-delay: 1s"></div>
 
-        <div class="auth-card glass relative z-10 space-y-8 animate-in fade-in zoom-in duration-500">
-            <div class="flex flex-col items-center space-y-2">
-                <div class="w-16 h-16 mx-gradient rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-2">
-                    <i data-lucide="play" class="w-8 h-8 fill-white text-white"></i>
+        <div class="auth-card glass relative z-10 space-y-10 animate-in fade-in zoom-in duration-700 p-10 sm:p-14">
+            <div class="flex flex-col items-center space-y-4">
+                <div class="w-20 h-20 mx-gradient rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 transform hover:rotate-6 transition">
+                    <i data-lucide="play" class="w-10 h-10 fill-white text-white"></i>
                 </div>
-                <h1 class="text-3xl font-extrabold tracking-tight">Live<span class="text-blue-500">+</span></h1>
-                <p id="auth-desc" class="text-white/40 text-sm">Experience premium streaming with ease.</p>
+                <div>
+                    <h1 class="text-4xl font-black tracking-tighter text-gradient">Live+</h1>
+                    <p id="auth-desc" class="text-white/40 text-xs font-bold uppercase tracking-[4px] mt-2">Next Gen Streaming</p>
+                </div>
             </div>
 
             <!-- Email Form (Step 1) -->
@@ -221,12 +230,13 @@
         <!-- Home Page -->
         <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-8 pt-4">
             <!-- Hero Card -->
-            <div class="relative w-full aspect-[16/9] rounded-3xl overflow-hidden glass group shadow-2xl">
-                <img src="https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=1200&q=80" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" alt="Hero">
-                <div class="absolute inset-x-0 bottom-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent">
-                    <span id="welcome-text" class="px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 text-[10px] font-bold tracking-widest uppercase mb-2 inline-block">Welcome back, Mohit</span>
-                    <h2 class="text-3xl font-extrabold mb-1">Global TV Hub</h2>
-                    <p class="text-white/60 text-sm">Experience streaming like never before with Live+ Premium.</p>
+            <div class="relative w-full aspect-[21/9] sm:aspect-[16/7] rounded-[40px] overflow-hidden glass group shadow-2xl">
+                <img src="https://images.unsplash.com/photo-1593784991095-a205039475fe?w=1200&q=80" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" alt="Hero">
+                <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+                <div class="absolute inset-x-0 bottom-0 p-8 sm:p-12">
+                    <span id="welcome-text" class="px-4 py-1.5 rounded-full bg-blue-600/30 text-blue-300 text-[10px] font-black tracking-[4px] uppercase mb-4 inline-block backdrop-blur-md">Welcome, User</span>
+                    <h2 class="text-4xl sm:text-5xl font-black mb-2 text-gradient leading-tight">Global TV Hub</h2>
+                    <p class="text-white/50 text-base max-w-md font-medium">Discover premium content from every corner of the world in stunning clarity.</p>
                 </div>
             </div>
 
@@ -240,28 +250,16 @@
                 </div>
             </div>
 
-            <!-- Dynamic Horizontal Lists -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-bold">Explore Categories</h3>
-                </div>
-                <div id="cat-scroll" class="flex space-x-3 overflow-x-auto pb-4 scroll-smooth">
-                    <div class="chip active" onclick="filterByGroup('All')">All Channels</div>
-                </div>
-            </div>
-
-            <!-- Featured Grid -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-bold">Top Selected</h3>
-                    <span class="text-xs text-white/30 uppercase font-bold tracking-widest">Recommended</span>
-                </div>
-                <div id="featured-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    <!-- Loading Skeletons -->
-                    <div class="skeleton w-full h-28 rounded-3xl"></div>
-                    <div class="skeleton w-full h-28 rounded-3xl"></div>
-                    <div class="skeleton w-full h-28 rounded-3xl"></div>
-                    <div class="skeleton w-full h-28 rounded-3xl"></div>
+            <!-- Dynamic Category Rows (Injected via JS) -->
+            <div id="category-rows" class="space-y-12">
+                <!-- Skeletons while loading -->
+                <div class="space-y-4 animate-pulse">
+                    <div class="h-6 w-32 bg-white/5 rounded-full"></div>
+                    <div class="flex space-x-4 overflow-hidden">
+                        <div class="w-64 h-36 bg-white/5 rounded-[32px] flex-shrink-0 border border-white/5"></div>
+                        <div class="w-64 h-36 bg-white/5 rounded-[32px] flex-shrink-0 border border-white/5"></div>
+                        <div class="w-64 h-36 bg-white/5 rounded-[32px] flex-shrink-0 border border-white/5"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -287,20 +285,26 @@
             <h2 class="text-3xl font-black">Profile</h2>
             
             <!-- User Profile Card -->
-            <div class="p-8 glass rounded-[40px] text-center space-y-4 relative overflow-hidden group">
-                <div class="absolute inset-0 bg-blue-600/5 group-hover:bg-blue-600/10 transition"></div>
-                <div class="relative inline-block group/avatar">
-                    <img id="user-avatar-large" src="https://api.dicebear.com/7.x/avataaars/svg?seed=mohit" class="w-32 h-32 rounded-full border-4 border-blue-600/20 p-1 mx-auto" alt="User">
-                    <button onclick="changeAvatar()" class="absolute bottom-1 right-1 p-2.5 bg-blue-600 rounded-full shadow-xl opacity-0 group-hover/avatar:opacity-100 transition">
-                        <i data-lucide="camera" class="w-4 h-4"></i>
-                    </button>
+            <div class="relative overflow-hidden glass rounded-[40px] p-10 group mt-10 shadow-2xl">
+                <div class="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-cyan-500/10 opacity-0 group-hover:opacity-100 transition duration-1000"></div>
+                
+                <div class="relative z-10 flex flex-col items-center text-center space-y-6">
+                    <div class="relative">
+                        <img id="user-avatar-large" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky" class="w-36 h-36 rounded-[48px] mx-gradient p-1.5 shadow-2xl transform group-hover:rotate-3 transition duration-500">
+                        <div class="absolute -bottom-2 -right-2 w-10 h-10 bg-green-500 border-4 border-black rounded-full shadow-lg"></div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <h3 id="user-name-display" class="text-4xl font-black text-gradient">Mohit</h3>
+                        <p id="user-bio-display" class="text-white/40 text-[10px] uppercase font-bold tracking-[6px] mt-1">Premium Streaming Member</p>
+                        <p id="user-age-display" class="text-blue-400 font-bold text-sm bg-blue-500/10 px-4 py-1 rounded-full inline-block mt-2">Age: 25</p>
+                    </div>
+                    
+                    <div class="flex space-x-4 w-full pt-4">
+                        <button onclick="toggleEditProfile()" class="flex-grow py-4 glass rounded-[24px] text-[10px] font-black uppercase tracking-[3px] text-blue-400 border-blue-500/20 active:scale-95 transition">Edit Profile</button>
+                        <button onclick="logout()" class="p-4 glass rounded-[24px] text-red-500/50 hover:text-red-500 transition"><i data-lucide="log-out" class="w-5 h-5"></i></button>
+                    </div>
                 </div>
-                <div class="space-y-1">
-                    <h3 id="user-name-display" class="text-2xl font-extrabold">Mohit</h3>
-                    <p id="user-bio-display" class="text-white/40 text-sm">TV Enthusiast &bull; Live+ Member</p>
-                    <p id="user-age-display" class="text-blue-500/60 text-[10px] font-bold uppercase tracking-widest">Age: 25</p>
-                </div>
-                <button onclick="toggleEditProfile()" class="px-6 py-2.5 glass rounded-full text-xs font-bold uppercase tracking-widest text-blue-400 border-blue-400/20">Edit Profile</button>
             </div>
 
             <!-- Edit Form (Hidden) -->
