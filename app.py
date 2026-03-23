@@ -7,7 +7,6 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import time
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -40,7 +39,6 @@ else:
 # Define collections safely
 users_col = db['users'] if db is not None else None
 otps_col = db['otps'] if db is not None else None
-channels_col = db['channels'] if db is not None else None
 
 # Email Setup Variables from Env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -49,8 +47,6 @@ MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
 PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
-CHANNELS_CACHE = []
-CACHE_TIME = 0
 
 # Helper: Parse M3U
 def parse_m3u(file_content):
@@ -64,7 +60,7 @@ def parse_m3u(file_content):
         
         if line.startswith("#EXTINF:"):
             # Robust parsing for logo and group
-            current = {"logo": "", "group": "General", "name": "Unnamed", "headers": {}}
+            current = {"logo": "", "group": "General", "name": "Unnamed"}
             
             # Extract attributes using regex
             logo_match = re.search(r'tvg-logo="([^"]+)"', line)
@@ -78,21 +74,10 @@ def parse_m3u(file_content):
             if len(parts) > 1:
                 current["name"] = parts[-1].strip()
         
-        elif line.startswith("#EXTVLCOPT:"):
-            # Handle user-agent and referer options
-            ua_match = re.search(r'http-user-agent=([^ ]+)', line)
-            if ua_match and current:
-                current["headers"]["User-Agent"] = ua_match.group(1)
-            ref_match = re.search(r'http-referrer=([^ ]+)', line)
-            if ref_match and current:
-                current["headers"]["Referer"] = ref_match.group(1)
-                
         elif line.startswith("http") and current:
-            # Filter for HTTPS to prevent mixed content issues on Vercel/HTTPS
-            if line.startswith("https://"):
-                current["url"] = line
-                if current["name"] != "Unnamed":
-                    channels.append(current)
+            current["url"] = line
+            if current["url"] and current["name"] != "Unnamed":
+                channels.append(current)
             current = {}
             
     return channels
@@ -226,53 +211,26 @@ def favicon():
 
 @app.route('/api/channels')
 def get_channels():
-    global CHANNELS_CACHE, CACHE_TIME
     try:
-        now = time.time()
-        
-        # 1. Check local global cache (fastest)
-        if CHANNELS_CACHE and (now - CACHE_TIME < 300): # 5 mins locally
-            return jsonify(CHANNELS_CACHE)
-
-        # 2. Check MongoDB cache (persistent across Vercel cold starts)
-        if channels_col is not None:
-            cache_doc = channels_col.find_one({"_id": "cache"})
-            if cache_doc:
-                last_update = cache_doc.get('time', 0)
-                # If cache is valid (less than 1 hour old)
-                if (now - last_update < 3600) and cache_doc.get('data'):
-                    CHANNELS_CACHE = cache_doc['data']
-                    CACHE_TIME = last_update
-                    return jsonify(CHANNELS_CACHE)
-        
-        # 3. If no cache or cache expired, fetch from source
-        print("Fetching fresh channels from source...")
+        # Check if we can use a smaller playlist or limit the current one
+        # The main playlist is huge; we try to fetch it but limit processing
         response = requests.get(PLAYLIST_URL, timeout=15)
         if not response.ok:
-             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-             return jsonify([{"name": "Server Maintenance", "group": "System", "url": "", "logo": ""}])
+            print(f"IPTV FETCH FAILED: {response.status_code}")
+            return jsonify({"error": f"IPTV provider error: {response.status_code}"}), 502
             
-        parsed = parse_m3u(response.text)
-        if not parsed:
-             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-             return jsonify([{"name": "Unavailable", "group": "System", "url": "", "logo": ""}])
-             
-        CHANNELS_CACHE = parsed[:1000]
-        CACHE_TIME = now
+        # Optimization: only parse first 1000 lines if it's too large, or handle with care
+        # For now, let's parse and return first 500 channels for performance
+        channels = parse_m3u(response.text)
         
-        # Update MongoDB for next cold start
-        if channels_col is not None:
-            channels_col.update_one(
-                {"_id": "cache"}, 
-                {"$set": {"data": CHANNELS_CACHE, "time": CACHE_TIME}}, 
-                upsert=True
-            )
+        if not channels:
+            return jsonify([{"name": "No Channels Found", "group": "Info", "url": "", "logo": ""}])
             
-        return jsonify(CHANNELS_CACHE)
+        # Return a manageable amount for mobile apps
+        return jsonify(channels[:500])
     except Exception as e:
         print(f"FETCH ERROR: {e}")
-        if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-        return jsonify({"error": "Gateway Timeout. Please reload app."}), 500
+        return jsonify({"error": f"Failed to load IPTV list: {str(e)}"}), 500
 
 @app.route('/service-worker.js')
 def sw():
