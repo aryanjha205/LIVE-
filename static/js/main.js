@@ -19,7 +19,9 @@ const authStep1 = document.getElementById('auth-step-1');
 const authStep2 = document.getElementById('auth-step-2');
 
 let movies = [];
-let trendingMovies = [];
+let trendingMovies = []; // For Hero/Discover
+let popularMovies = [];
+let topMovies = [];
 let hls = null;
 let isLocked = false;
 let currentAspectRatio = 'fill';
@@ -38,30 +40,25 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 async function fetchMovies() {
     console.log("Fetching movies...");
     try {
-        const response = await fetch('/api/movies');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const [m, d, p, r] = await Promise.all([
+            fetch('/api/movies').then(r => r.json()),
+            fetch('/api/discover').then(r => r.json()),
+            fetch('/api/movies/popular').then(r => r.json()),
+            fetch('/api/movies/rating').then(r => r.json())
+        ]);
         
-        movies = await response.json();
-        console.log(`Loaded ${movies.length} movies.`);
+        movies = m;
+        trendingMovies = d;
+        popularMovies = p;
+        topMovies = r;
         
-        fetchDiscover();
+        renderHome();
         renderExplore();
         renderFavorites();
         renderRecent();
     } catch (error) {
         console.error('Movie Fetch ERROR:', error);
         showToast('Server Unreachable', 'error');
-    }
-}
-
-async function fetchDiscover() {
-    try {
-        const res = await fetch('/api/discover');
-        trendingMovies = await res.json();
-        renderHome();
-    } catch (e) {
-        console.error(e);
-        renderHome();
     }
 }
 
@@ -151,8 +148,8 @@ async function verifyOTP() {
             authOverlay.style.display = 'none';
             switchPage('home');
             updateUIWithUser();
-            fetchChannels();
-            showToast("Welcome back to Live+!");
+            fetchMovies();
+            showToast("Welcome back to MX Player!");
         }
     } catch (err) {
         showToast(err.message, 'error');
@@ -195,7 +192,7 @@ async function finishSetup() {
         authOverlay.style.display = 'none';
         switchPage('home');
         updateUIWithUser();
-        fetchChannels();
+        fetchMovies();
         showToast("Profile set up successfully!");
     } catch (e) {
         showToast("Could not save profile");
@@ -209,7 +206,8 @@ function backToEmail() {
 
 function updateUIWithUser() {
     if (!currentUser) return;
-    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
+    const w = document.getElementById('welcome-text');
+    if (w) w.innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
     document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;
@@ -269,50 +267,74 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    const grid = document.getElementById('featured-grid');
-    const movieGrid = document.getElementById('trending-movies-grid');
-    if (!grid || !movieGrid) return;
+    const hero = document.getElementById('hero-banner');
+    const trendingRail = document.getElementById('trending-rail');
+    const popularRail = document.getElementById('popular-rail');
+    const ratedRail = document.getElementById('rated-rail');
     
-    grid.innerHTML = '';
-    movieGrid.innerHTML = '';
-    
-    const items = trendingMovies.length ? trendingMovies : movies.slice(0, 12);
-    
-    items.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'group relative aspect-[2/3] rounded-[32px] overflow-hidden glass hover:scale-[1.02] active:scale-95 transition-all duration-500 cursor-pointer shadow-2xl';
-            
-        card.innerHTML = `
-            <img src="${item.logo}" class="absolute inset-0 w-full h-full object-cover" onerror="this.src='/static/icon-192.png'">
-            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-100 group-hover:via-black/40 transition-all duration-500"></div>
-            <div class="absolute bottom-6 left-6 right-6 translate-y-2 group-hover:translate-y-0 transition-all duration-500">
-                <p class="text-[10px] text-blue-400 font-bold uppercase tracking-[4px] mb-2">${item.genres[0] || 'Movie'}</p>
-                <h4 class="font-black text-xl leading-tight truncate px-0.5">${item.name}</h4>
-                <div class="flex items-center space-x-2 mt-2">
-                    <span class="px-3 py-1 bg-white/10 backdrop-blur text-[10px] font-black rounded-lg">${item.year} &bull; ${item.rating}</span>
+    if (!hero || !trendingRail) return;
+
+    // 1. Render Hero Banner
+    const heroMovie = trendingMovies[0] || movies[0];
+    if (heroMovie) {
+        hero.innerHTML = `
+            <img src="${heroMovie.image}" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent"></div>
+            <div class="absolute bottom-12 left-12 space-y-4 max-w-2xl">
+                <div class="flex items-center space-x-3">
+                    <span class="px-3 py-1 bg-blue-600 text-[10px] font-black uppercase rounded-lg">MX Exclusive</span>
+                    <span class="text-white/60 text-xs font-bold underline decoration-blue-500/50">${heroMovie.genres.join(', ')}</span>
+                </div>
+                <h1 class="text-6xl font-black tracking-tighter text-gradient">${heroMovie.name}</h1>
+                <p class="text-white/40 text-sm line-clamp-2">${heroMovie.summary}</p>
+                <div class="flex items-center space-x-4 pt-4">
+                    <button onclick='openPlayer(${JSON.stringify(heroMovie)})' class="px-8 py-4 bg-white text-black rounded-2xl font-black flex items-center space-x-3 hover:scale-105 transition">
+                        <i data-lucide="play" class="w-5 h-5 fill-black"></i>
+                        <span>Start Watching</span>
+                    </button>
+                    <button onclick="toggleFavorite(event, '${heroMovie.name}')" class="p-4 glass rounded-2xl text-white active:scale-95 transition">
+                        <i data-lucide="plus" class="w-6 h-6"></i>
+                    </button>
                 </div>
             </div>
         `;
-        card.onclick = () => openPlayer(item);
-        grid.appendChild(card);
-    });
-
-    if (movies.length) {
-        movies.slice(0, 20).forEach(m => {
-            const card = document.createElement('div');
-            card.className = 'flex-shrink-0 w-44 rounded-[32px] glass p-1 aspect-[2/3] group relative overflow-hidden active:scale-95 transition-all duration-300 cursor-pointer shadow-xl border border-white/5';
-            card.innerHTML = `
-                <img src="${m.logo}" class="absolute inset-0 w-full h-full object-cover rounded-[32px]">
-                <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                <div class="absolute bottom-4 left-4 right-4">
-                    <h4 class="font-bold text-[10px] truncate w-32 uppercase tracking-tighter">${m.name}</h4>
-                </div>
-            `;
-            card.onclick = () => openPlayer(m);
-            movieGrid.appendChild(card);
-        });
     }
+
+    // 2. Render Rails
+    renderRail(trendingRail, trendingMovies);
+    renderRail(popularRail, popularMovies);
+    renderRail(ratedRail, topMovies);
+    
     lucide.createIcons();
+}
+
+function renderRail(container, list) {
+    if (!container || !list) return;
+    container.innerHTML = '';
+    list.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'flex-shrink-0 w-48 group cursor-pointer space-y-3';
+        card.innerHTML = `
+            <div class="relative aspect-[2/3] rounded-[32px] overflow-hidden glass shadow-2xl">
+                <img src="${m.logo}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700">
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-sm">
+                    <div class="w-14 h-14 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-2xl scale-50 group-hover:scale-100 transition duration-500">
+                        <i data-lucide="play" class="w-6 h-6 fill-blue-600 ml-1"></i>
+                    </div>
+                </div>
+                <div class="absolute top-4 right-4 bg-black/40 backdrop-blur px-2 py-1 rounded-lg text-[10px] font-bold border border-white/10">
+                    ★ ${m.rating}
+                </div>
+            </div>
+            <div class="px-2">
+                <h4 class="font-bold text-sm truncate uppercase tracking-tight">${m.name}</h4>
+                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">${m.year} &bull; ${m.genres[0]}</p>
+            </div>
+        `;
+        card.onclick = () => openPlayer(m);
+        container.appendChild(card);
+    });
 }
 
 function renderExplore(list = movies) {
@@ -348,7 +370,8 @@ function openPlayer(movie) {
     // For a YTS site, we show details since direct streaming is complex
     showToast(`Streaming ${movie.name}...`, 'info');
     playerView.style.display = 'block';
-    document.getElementById('player-channel-name').textContent = movie.name;
+    const pn = document.getElementById('player-movie-name');
+    if (pn) pn.textContent = movie.name;
     
     // We could potentially use a peer-to-peer or third party player here
     // But for this GUI task, we just show a backdrop and info

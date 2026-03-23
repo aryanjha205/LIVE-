@@ -194,12 +194,45 @@ def index():
 def favicon():
     return app.send_static_file('icon-192.png')
 
+@app.route('/api/movies/popular')
+def get_popular_movies():
+    try:
+        limit = request.args.get('limit', 15)
+        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=download_count", timeout=15)
+        data = response.json()
+        movies = data.get("data", {}).get("movies", [])
+        return jsonify(clean_movie_data(movies))
+    except Exception as e:
+        return jsonify([])
+
+@app.route('/api/movies/latest')
+def get_latest_movies():
+    try:
+        limit = request.args.get('limit', 15)
+        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=year", timeout=15)
+        data = response.json()
+        movies = data.get("data", {}).get("movies", [])
+        return jsonify(clean_movie_data(movies))
+    except Exception as e:
+        return jsonify([])
+
+@app.route('/api/movies/rating')
+def get_rated_movies():
+    try:
+        limit = request.args.get('limit', 15)
+        response = requests.get(f"{MOVIE_API_URL}?limit={limit}&sort_by=rating", timeout=15)
+        data = response.json()
+        movies = data.get("data", {}).get("movies", [])
+        return jsonify(clean_movie_data(movies))
+    except Exception as e:
+        return jsonify([])
+
 @app.route('/api/movies')
 def get_movies():
     try:
-        limit = request.args.get('limit', 24)
+        limit = request.args.get('limit', 30)
         page = request.args.get('page', 1)
-        sort = request.args.get('sort', 'download_count')
+        sort = request.args.get('sort', 'seeds')
         
         query_url = f"{MOVIE_API_URL}?limit={limit}&page={page}&sort_by={sort}"
         response = requests.get(query_url, timeout=15)
@@ -217,8 +250,8 @@ def get_movies():
 @app.route('/api/discover')
 def get_discover():
     try:
-        # Use popular movies as discover content
-        response = requests.get(f"{MOVIE_API_URL}?limit=12&sort_by=rating", timeout=10)
+        # Hero Banner Content
+        response = requests.get(f"{MOVIE_API_URL}?limit=5&sort_by=like_count", timeout=10)
         data = response.json()
         movies = data.get("data", {}).get("movies", [])
         return jsonify(clean_movie_data(movies))

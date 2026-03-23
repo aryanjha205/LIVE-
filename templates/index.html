@@ -157,12 +157,12 @@
 </head>
 <body class="bg-black text-white selection:bg-blue-500/30">
 
-    <div id="auth-overlay">
+    <div id="auth-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-2xl z-[1000] flex items-center justify-center p-6 sm:p-10">
         <!-- Background elements for visual flair -->
-        <div class="absolute w-[80%] aspect-square bg-[#3d5afe]/20 blur-[150px] rounded-full top-0 left-[-20%] animate-pulse"></div>
-        <div class="absolute w-[60%] aspect-square bg-[#00e5ff]/20 blur-[150px] rounded-full bottom-0 right-[-10%] animate-pulse" style="animation-delay: 1s"></div>
+        <div class="absolute w-[80%] aspect-square bg-blue-600/20 blur-[150px] rounded-full top-0 left-[-20%] animate-pulse"></div>
+        <div class="absolute w-[60%] aspect-square bg-[#3C8CEF]/20 blur-[150px] rounded-full bottom-0 right-[-10%] animate-pulse" style="animation-delay: 1s"></div>
 
-        <div class="auth-card glass relative z-10 space-y-10 animate-in fade-in zoom-in duration-700 p-10 sm:p-14">
+        <div class="auth-card glass relative z-10 w-full max-w-lg space-y-10 animate-in fade-in zoom-in duration-700 p-10 sm:p-14 rounded-[40px] border border-white/10 shadow-2xl">
             <div class="flex flex-col items-center space-y-4">
                 <div class="w-20 h-20 mx-gradient rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 transform hover:scale-110 transition duration-500">
                     <div class="w-0 h-0 border-t-[12px] border-t-transparent border-l-[20px] border-l-white border-b-[12px] border-b-transparent ml-2"></div>
@@ -228,48 +228,62 @@
     <main class="flex-grow overflow-hidden relative">
         
         <!-- Home Page -->
-        <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-12 pt-8">
+        <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto pb-24 space-y-12">
             
-            <!-- Welcome Header (Premium Text Only) -->
-            <div class="space-y-2 mt-4">
-                <div class="flex items-center space-x-3">
-                    <span class="w-10 h-[2px] bg-blue-500 rounded-full"></span>
-                    <span id="welcome-text" class="text-blue-500 text-[10px] font-black uppercase tracking-[5px]">Welcome Back</span>
-                </div>
-                <h2 class="text-5xl font-black tracking-tighter leading-none font-outfit"><span class="text-white/40">Watch</span> <br> <span class="text-gradient">MX Originals</span></h2>
+            <!-- Hero Carousel Placeholder -->
+            <div id="hero-banner" class="relative w-full aspect-[21/9] sm:aspect-[21/7] overflow-hidden">
+                <!-- Injected via JS -->
+                 <div class="skeleton w-full h-full"></div>
             </div>
 
-            <!-- Recently Watched -->
-            <div id="recent-section" class="space-y-6 hidden">
-                <div class="flex items-center justify-between px-1">
-                    <h3 class="text-xl font-black text-white/90">Recently Watched</h3>
+            <!-- Rails Container -->
+            <div class="px-6 space-y-14">
+                
+                <!-- Personalised Welcome -->
+                <div class="space-y-1 pt-4">
+                    <p id="welcome-text" class="text-blue-500 text-[10px] font-black uppercase tracking-[5px]"></p>
+                    <h2 class="text-3xl font-black text-gradient">Recommended For You</h2>
                 </div>
-                <div id="recent-scroll" class="flex space-x-5 overflow-x-auto pb-4 no-scrollbar">
-                    <!-- Injected by JS -->
-                </div>
-            </div>
 
-            <!-- Discover Grid (TVMaze Trending) -->
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-black tracking-tight text-white/90">Curated Discovery</h3>
-                    <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-black uppercase tracking-[3px] cursor-pointer">Explore All</span>
+                <!-- Recently Watched -->
+                <div id="recent-section" class="space-y-6 hidden">
+                    <h3 class="text-2xl font-black text-white px-1">Recent Watches</h3>
+                    <div id="recent-scroll" class="flex space-x-5 overflow-x-auto pb-4 no-scrollbar"></div>
                 </div>
-                <div id="featured-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-                    <!-- Injected by JS (TVMaze Shows) -->
-                    <div class="skeleton aspect-[2/3] rounded-[32px]"></div>
-                    <div class="skeleton aspect-[2/3] rounded-[32px]"></div>
-                </div>
-            </div>
 
-            <!-- Movies Grid Section -->
-            <div id="trending-section" class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-black tracking-tight text-white/90">Popular Movies</h3>
-                    <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-black uppercase tracking-[3px] cursor-pointer">View All</span>
+                <!-- Trending Content (Discover) -->
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between px-1">
+                        <h3 class="text-2xl font-black text-white">Trending Now</h3>
+                        <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-bold uppercase tracking-widest cursor-pointer hover:underline underline-offset-8">Explore More</span>
+                    </div>
+                    <div id="trending-rail" class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
+                        <!-- Injected by JS -->
+                    </div>
                 </div>
-                <div id="trending-movies-grid" class="flex space-x-6 overflow-x-auto pb-8 no-scrollbar scroll-smooth">
-                    <!-- Injected by JS -->
+
+                <!-- Popular Movies -->
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-white px-1">Popular on MX</h3>
+                    <div id="popular-rail" class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Top Rated -->
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-white px-1">Critically Acclaimed</h3>
+                    <div id="rated-rail" class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Bottom Banner -->
+                <div class="rounded-[40px] overflow-hidden relative group aspect-[21/5] mx-gradient p-12 flex flex-col justify-center">
+                    <div class="absolute inset-x-0 bottom-0 top-1/2 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    <h2 class="text-3xl font-black relative z-10">Premium Ad-Free Experience</h2>
+                    <p class="text-white/60 text-sm mt-2 relative z-10">Get the best of Everytainment with MX Gold</p>
+                    <button class="mt-6 px-8 py-3 bg-white text-blue-600 rounded-full font-black text-xs self-start relative z-10 hover:scale-105 transition">Coming Soon</button>
                 </div>
             </div>
         </div>
@@ -384,12 +398,15 @@
             <!-- Controls remain the same as previous version but styled cleaner -->
             <div class="flex items-center justify-between pt-[var(--safe-top)]">
                 <div class="flex items-center space-x-3">
-                    <button onclick="exitPlayer()" class="p-3 bg-white/5 rounded-2xl">
-                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                    <button onclick="exitPlayer()" class="p-4 bg-white/10 backdrop-blur rounded-3xl hover:bg-white/20 transition group">
+                        <i data-lucide="chevron-left" class="w-6 h-6 group-hover:-translate-x-1 transition"></i>
                     </button>
                     <div>
-                        <span id="player-channel-name" class="font-bold text-xl block leading-none">Channel</span>
-                        <span class="text-blue-500 text-[10px] uppercase font-black tracking-widest flex items-center mt-1"><span class="w-2 h-2 bg-red-600 rounded-full mr-2 animate-ping"></span>Live Now</span>
+                        <span id="player-movie-name" class="font-black text-2xl block tracking-tighter">Movie Name</span>
+                        <div class="flex items-center space-x-2 mt-1.5">
+                            <span class="px-2 py-0.5 bg-blue-500 rounded text-[9px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-500/20">HD 1080p</span>
+                            <span class="text-white/40 text-[9px] uppercase font-bold tracking-widest">&bull; Multi-audio Support</span>
+                        </div>
                     </div>
                 </div>
                  <div class="flex items-center space-x-2">
