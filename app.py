@@ -46,30 +46,40 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://raw.githubusercontent.com/LaneSh44/SamsungTVPlus-M3U/main/SamsungTVPlus-Global.m3u"
+PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
 
 # Helper: Parse M3U
 def parse_m3u(file_content):
     channels = []
-    current_channel = {}
-    extinf_re = re.compile(r'#EXTINF:(-?\d+)(.*),(.*)')
-    logo_re = re.compile(r'tvg-logo="([^"]+)"')
-    group_re = re.compile(r'group-title="([^"]+)"')
     lines = file_content.splitlines()
-    for i in range(len(lines)):
-        line = lines[i].strip()
+    current = {}
+    
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        
         if line.startswith("#EXTINF:"):
-            match = extinf_re.match(line)
-            if match:
-                current_channel["name"] = match.group(3).strip()
-                logo_match = logo_re.search(line)
-                current_channel["logo"] = logo_match.group(1) if logo_match else ""
-                group_match = group_re.search(line)
-                current_channel["group"] = group_match.group(1) if group_match else "General"
-        elif line.startswith("http"):
-            current_channel["url"] = line
-            channels.append(current_channel)
-            current_channel = {}
+            # Robust parsing for logo and group
+            current = {"logo": "", "group": "General", "name": "Unnamed"}
+            
+            # Extract attributes using regex
+            logo_match = re.search(r'tvg-logo="([^"]+)"', line)
+            if logo_match: current["logo"] = logo_match.group(1)
+            
+            group_match = re.search(r'group-title="([^"]+)"', line)
+            if group_match: current["group"] = group_match.group(1).split(';')[0].strip()
+            
+            # Name is always after the last comma
+            parts = line.split(',')
+            if len(parts) > 1:
+                current["name"] = parts[-1].strip()
+        
+        elif line.startswith("http") and current:
+            current["url"] = line
+            if current["url"] and current["name"] != "Unnamed":
+                channels.append(current)
+            current = {}
+            
     return channels
 
 # --- AUTH ROUTES ---
