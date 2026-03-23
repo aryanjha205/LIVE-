@@ -261,70 +261,60 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    const container = document.getElementById('category-rows');
-    if (!container || !channels.length) return;
-
-    // Grouping logic
-    const groups = channels.reduce((acc, c) => {
-        const g = c.group || 'General';
-        if (!acc[g]) acc[g] = [];
-        acc[g].push(c);
-        return acc;
-    }, {});
-
-    container.innerHTML = '';
+    const grid = document.getElementById('featured-grid');
+    if (!grid || !channels.length) return;
     
-    // Sort and render each group
-    Object.keys(groups).sort().forEach(g => {
-        const groupChannels = groups[g].slice(0, 15);
-        if (groupChannels.length < 2) return;
-
-        const row = document.createElement('div');
-        row.className = 'space-y-4 animate-in fade-in slide-in-from-bottom duration-700';
-        row.innerHTML = `
-            <div class="flex items-center justify-between px-2">
-                <h3 class="text-xl font-black text-white/90 tracking-tighter">${g}</h3>
-                <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-black uppercase tracking-[3px] border-b border-blue-500/20 pb-0.5">See All</span>
+    grid.innerHTML = '';
+    // Show top 32 channels on Home as "Discover"
+    channels.slice(0, 32).forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'channel-card glass p-4 flex items-center space-x-4 active:scale-95 transition cursor-pointer border border-white/5 relative overflow-hidden group';
+        card.innerHTML = `
+            <div class="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition"></div>
+            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5 relative z-10" onerror="this.src='/static/icon-192.png'">
+            <div class="flex-grow min-w-0 relative z-10">
+                <h4 class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</h4>
+                <p class="text-[9px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${c.group}</p>
             </div>
-            <div class="flex space-x-5 overflow-x-auto pb-6 -mx-2 px-2 no-scrollbar scroll-smooth">
-                ${groupChannels.map(c => `
-                    <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-64 aspect-video relative rounded-[36px] overflow-hidden glass group cursor-pointer border border-white/5 active:scale-95 transition-all">
-                        <img src="${c.logo}" class="w-full h-full object-cover opacity-40 group-hover:scale-110 transition duration-1000" onerror="this.src='/static/icon-192.png'">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
-                        <div class="absolute inset-x-0 bottom-0 p-6">
-                            <h4 class="text-sm font-black truncate text-white/90">${c.name}</h4>
-                            <div class="flex items-center mt-1.5 space-x-2">
-                                <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                <p class="text-[9px] text-white/30 font-bold uppercase tracking-[2px]">Online Now</p>
-                            </div>
-                        </div>
-                        <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="absolute top-4 right-4 p-3 glass rounded-[20px] opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110">
-                            <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
-                        </button>
-                    </div>
-                `).join('')}
-            </div>
+            <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="relative z-20 p-2 text-white/20 hover:text-red-500 transition">
+                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            </button>
         `;
-        container.appendChild(row);
+        card.onclick = () => openPlayer(c);
+        grid.appendChild(card);
     });
     lucide.createIcons();
 }
 
 function renderExplore(list = channels) {
-    allChannelsList.innerHTML = '';
-    list.slice(0, 50).forEach(c => {
+    const listContainer = document.getElementById('all-channels-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '';
+    // Show ALL channels in Explore
+    list.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition';
+        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
         item.innerHTML = `
-            <img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover" onerror="this.src='/static/icon-192.png'">
-            <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-base truncate">${c.name}</span>
-                <span class="text-[10px] text-white/20 uppercase font-black tracking-widest">${c.group}</span>
+            <div class="relative w-12 h-12 flex-shrink-0">
+                <img src="${c.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full shadow-lg"></div>
             </div>
-            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center"><i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i></div>
+            <div class="flex flex-col min-w-0 flex-grow">
+                <span class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</span>
+                <span class="text-[9px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${c.group}</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl opacity-40 hover:opacity-100 transition">
+                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+                </button>
+                <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600/30 transition">
+                    <i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i>
+                </div>
+            </div>
         `;
         item.onclick = () => openPlayer(c);
-        allChannelsList.appendChild(item);
+        listContainer.appendChild(item);
     });
     lucide.createIcons();
 }
