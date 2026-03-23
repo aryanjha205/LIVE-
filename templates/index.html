@@ -46,58 +46,63 @@
 
         .glass {
             background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .mx-gradient { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+        .text-gradient {
+            background: linear-gradient(135deg, #fff, var(--primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
 
         /* Animation */
         .page-transition {
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
         }
 
-        .hidden-left { transform: translateX(-100%); opacity: 0; }
-        .hidden-right { transform: translateX(100%); opacity: 0; }
+        .hidden-left { transform: translateX(-50%); opacity: 0; pointer-events: none; }
+        .hidden-right { transform: translateX(50%); opacity: 0; pointer-events: none; }
 
         /* Bottom Nav */
         .bottom-nav {
             padding-bottom: var(--safe-bottom);
-            height: calc(70px + var(--safe-bottom));
+            height: calc(80px + var(--safe-bottom));
         }
 
         .nav-item.active { color: var(--primary); }
-        .nav-item.active i { transform: translateY(-4px); filter: drop-shadow(0 0 8px var(--primary)); }
-        .nav-item i { transition: all 0.3s ease; }
+        .nav-item.active i { transform: translateY(-6px); filter: drop-shadow(0 0 12px var(--primary)); }
+        .nav-item i { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
-        /* Auth UI */
-        #auth-overlay {
-            position: fixed;
+        /* Cards */
+        .channel-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .channel-card::after {
+            content: '';
+            position: absolute;
             inset: 0;
-            background: black;
-            z-index: 500;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            padding: 24px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
         }
-
-        .auth-card {
-            width: 100%;
-            max-width: 400px;
-            padding: 40px 30px;
-            border-radius: 30px;
-            text-align: center;
-        }
+        .channel-card:hover::after { opacity: 1; }
 
         /* Input */
         .input-pill {
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 18px;
-            padding: 16px 20px;
+            border-radius: 20px;
+            padding: 18px 25px;
             width: 100%;
             color: white;
             outline: none;
@@ -106,8 +111,15 @@
         .input-pill:focus {
             border-color: var(--primary);
             background: rgba(255,255,255,0.1);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
         }
 
+        /* Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, #0a0a0b 25%, #121214 50%, #0a0a0b 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 2s infinite;
+        }
         /* Player Overlay */
         .player-fullscreen {
             position: fixed;
@@ -115,40 +127,24 @@
             background: black;
             z-index: 100;
             display: none;
+            overflow: hidden;
         }
+        #video {
+            width: 100%;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+        .fit { object-fit: contain; }
+        .fill { object-fit: cover; }
+        .stretch { object-fit: fill; }
 
-        /* Category Chips */
-        .chip {
-            padding: 8px 18px;
-            border-radius: 99px;
-            background: rgba(255,255,255,0.05);
-            font-size: 13px;
-            font-weight: 500;
-            white-space: nowrap;
-            transition: all 0.3s;
+        .lock-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 120;
+            display: none;
         }
-        .chip.active {
-            background: var(--primary);
-            color: white;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-
-        /* Avatar */
-        .avatar-option.selected {
-            border-color: var(--primary);
-            transform: scale(1.1);
-        }
-
-        /* Skeleton */
-        .skeleton {
-            background: linear-gradient(90deg, #121214 25%, #1a1a1c 50%, #121214 75%);
-            background-size: 200% 100%;
-            animation: skeleton-loading 1.5s infinite;
-        }
-        @keyframes skeleton-loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
+        .lock-overlay.active { display: block; }
     </style>
 </head>
 <body class="bg-black text-white selection:bg-blue-500/30">
@@ -234,6 +230,16 @@
                 </div>
             </div>
 
+            <!-- Recent Watching (Dynamic) -->
+            <div id="recent-section" class="space-y-4 hidden">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold">Recently Watched</h3>
+                </div>
+                <div id="recent-scroll" class="flex space-x-4 overflow-x-auto pb-2">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
             <!-- Dynamic Horizontal Lists -->
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -241,10 +247,6 @@
                 </div>
                 <div id="cat-scroll" class="flex space-x-3 overflow-x-auto pb-4 scroll-smooth">
                     <div class="chip active" onclick="filterByGroup('All')">All Channels</div>
-                    <div class="chip" onclick="filterByGroup('News')">Global News</div>
-                    <div class="chip" onclick="filterByGroup('Sports')">Sports & Live TV</div>
-                    <div class="chip" onclick="filterByGroup('Music')">Music</div>
-                    <div class="chip" onclick="filterByGroup('Entertainment')">Entertainment</div>
                 </div>
             </div>
 
@@ -362,7 +364,7 @@
 
     <!-- Fullscreen Player View -->
     <div id="player-view" class="player-fullscreen">
-        <video id="video" class="fit" playsinline></video>
+        <video id="video" class="fill" playsinline></video>
         <div id="lock-overlay" class="lock-overlay" onclick="onLockedScreenTouched()"></div>
         <div id="controls" class="absolute inset-0 z-[110] flex flex-col justify-between p-6 bg-gradient-to-b from-black/80 via-transparent to-black/80">
             <!-- Controls remain the same as previous version but styled cleaner -->
@@ -376,7 +378,10 @@
                         <span class="text-blue-500 text-[10px] uppercase font-black tracking-widest flex items-center mt-1"><span class="w-2 h-2 bg-red-600 rounded-full mr-2 animate-ping"></span>Live Now</span>
                     </div>
                 </div>
-                <div class="flex items-center space-x-2">
+                 <div class="flex items-center space-x-2">
+                    <button onclick="copyShareLink()" class="p-3 bg-white/5 rounded-2xl">
+                        <i data-lucide="share-2" class="w-5 h-5"></i>
+                    </button>
                     <button id="lock-btn" onclick="toggleLock()" class="p-3 bg-white/5 rounded-2xl">
                         <i data-lucide="unlock" class="w-5 h-5" id="lock-icon"></i>
                     </button>
@@ -385,7 +390,7 @@
             
             <div class="flex items-center justify-center space-x-12">
                 <button onclick="skip(-30)" class="p-4 rounded-full active:bg-white/10"><i data-lucide="rewind" class="w-8 h-8 opacity-40"></i></button>
-                <div id="play-pause-btn" class="w-24 h-24 rounded-full mx-gradient flex items-center justify-center shadow-2xl shadow-blue-500/30">
+                <div id="play-pause-btn" class="w-24 h-24 rounded-full mx-gradient flex items-center justify-center shadow-2xl shadow-blue-500/30 cursor-pointer">
                     <i data-lucide="play" class="w-12 h-12 fill-white" id="p-icon"></i>
                 </div>
                 <button onclick="skip(30)" class="p-4 rounded-full active:bg-white/10"><i data-lucide="fast-forward" class="w-8 h-8 opacity-40"></i></button>
@@ -396,6 +401,7 @@
                      <div class="flex space-x-4">
                         <button onclick="toggleAspectRatio()" class="flex flex-col items-center glass p-3 rounded-2xl"><i data-lucide="monitor" class="w-5 h-5 text-blue-400"></i></button>
                         <button onclick="toggleRotate()" class="flex flex-col items-center glass p-3 rounded-2xl"><i data-lucide="refresh-cw" class="w-5 h-5 text-blue-400"></i></button>
+                        <button onclick="toggleSleepTimer()" class="flex flex-col items-center glass p-3 rounded-2xl"><i data-lucide="clock" class="w-5 h-5 text-blue-400"></i></button>
                      </div>
                      <button onclick="toggleFullScreen()" class="glass p-3 rounded-2xl"><i data-lucide="maximize" class="w-6 h-6"></i></button>
                 </div>

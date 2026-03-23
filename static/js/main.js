@@ -21,7 +21,7 @@ const authStep2 = document.getElementById('auth-step-2');
 let channels = [];
 let hls = null;
 let isLocked = false;
-let currentAspectRatio = 'fit';
+let currentAspectRatio = 'fill';
 let rotation = 0;
 let controlsTimeout;
 let startY = 0;
@@ -47,15 +47,27 @@ async function fetchChannels() {
             showToast('No channels available', 'info');
         }
         
+        renderCategories();
         renderHome();
         renderExplore();
         renderFavorites();
+        renderRecent();
     } catch (error) {
         console.error('Channel Fetch ERROR:', error);
         showToast('Stream Server Unreachable', 'error');
         // Clear skeletons to show error
         featuredGrid.innerHTML = `<div class="p-10 text-center opacity-30 col-span-full">Failed to load channels. Check your connection.</div>`;
     }
+}
+
+function renderCategories() {
+    const catScroll = document.getElementById('cat-scroll');
+    if (!catScroll) return;
+    
+    const groups = ['All', ...new Set(channels.map(c => c.group))].filter(g => g && g !== 'General').slice(0, 15);
+    catScroll.innerHTML = groups.map(g => `
+        <div class="chip ${g === 'All' ? 'active' : ''}" onclick="filterByGroup('${g}')">${g}</div>
+    `).join('');
 }
 
 // --- AUTH LOGIC ---
@@ -303,6 +315,10 @@ function renderExplore(list = channels) {
 function openPlayer(channel) {
     playerView.style.display = 'block';
     document.getElementById('player-channel-name').textContent = channel.name;
+    
+    // Feature: Add to Recent
+    addToRecent(channel);
+
     if (Hls.isSupported()) {
         if (hls) hls.destroy();
         hls = new Hls();
@@ -422,15 +438,25 @@ function toggleSearch() {
 
 globalSearch.oninput = (e) => {
     const q = e.target.value.toLowerCase();
-    const res = channels.filter(c => c.name.toLowerCase().includes(q)).slice(0, 30);
+    if (!q) { searchResults.innerHTML = ''; return; }
+    
+    const res = channels.filter(c => c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 30);
     searchResults.innerHTML = '';
     res.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-5 rounded-3xl flex items-center space-x-4 active:scale-95 transition';
-        item.innerHTML = `<img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover"><span class="font-bold">${c.name}</span>`;
+        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 active:scale-95 transition';
+        item.innerHTML = `
+            <img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
+            <div class="flex flex-col min-w-0 flex-grow">
+                <span class="font-bold text-base truncate">${c.name}</span>
+                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">${c.group}</span>
+            </div>
+            <div class="p-3"><i data-lucide="play" class="w-5 h-5 text-white/20"></i></div>
+        `;
         item.onclick = () => { openPlayer(c); toggleSearch(); };
         searchResults.appendChild(item);
     });
+    lucide.createIcons();
 };
 
 function filterByGroup(group) {
@@ -466,11 +492,68 @@ function renderFavorites() {
     lucide.createIcons();
 }
 
+// --- NEW FEATURES ---
+
+function addToRecent(channel) {
+    let recents = JSON.parse(localStorage.getItem('recents') || '[]');
+    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 5);
+    localStorage.setItem('recents', JSON.stringify(recents));
+    renderRecent();
+}
+
+function renderRecent() {
+    const section = document.getElementById('recent-section');
+    const scroll = document.getElementById('recent-scroll');
+    const recents = JSON.parse(localStorage.getItem('recents') || '[]');
+    
+    if (recents.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+    
+    section.classList.remove('hidden');
+    scroll.innerHTML = recents.map(c => `
+        <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-20 text-center space-y-2">
+            <div class="w-16 h-16 rounded-2xl glass p-1 mx-auto overflow-hidden">
+                <img src="${c.logo}" class="w-full h-full object-cover rounded-xl" onerror="this.src='/static/icon-192.png'">
+            </div>
+            <p class="text-[10px] font-bold truncate opacity-60">${c.name}</p>
+        </div>
+    `).join('');
+}
+
+function copyShareLink() {
+    const channelName = document.getElementById('player-channel-name').innerText;
+    const dummyLink = `https://liveplus.app/watch?channel=${encodeURIComponent(channelName)}`;
+    navigator.clipboard.writeText(dummyLink).then(() => {
+        showToast("Share Link Copied!");
+    });
+}
+
+let sleepTimer = null;
+function toggleSleepTimer() {
+    if (sleepTimer) {
+        clearTimeout(sleepTimer);
+        sleepTimer = null;
+        showToast("Sleep Timer Off");
+    } else {
+        sleepTimer = setTimeout(() => {
+            exitPlayer();
+            showToast("Sleep Timer: Stream Stopped");
+        }, 30 * 60 * 1000); // 30 mins
+        showToast("Sleep Timer: 30 Minutes Set");
+    }
+}
+
 function showToast(msg, type='info') {
     const t = document.getElementById('global-toast');
     t.innerText = msg;
     t.style.opacity = '1';
-    setTimeout(() => t.style.opacity = '0', 3000);
+    t.style.top = '10%';
+    setTimeout(() => {
+        t.style.opacity = '0';
+        t.style.top = '8%';
+    }, 3000);
 }
 
 function resetControlsTimer() {
