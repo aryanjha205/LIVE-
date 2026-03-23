@@ -201,7 +201,6 @@ function backToEmail() {
 
 function updateUIWithUser() {
     if (!currentUser) return;
-    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
     document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;

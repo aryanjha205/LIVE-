@@ -46,17 +46,17 @@
         h1, h2, h3 { font-family: 'Outfit', sans-serif; }
 
         .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(35px);
-            -webkit-backdrop-filter: blur(35px);
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(45px) saturate(180%);
+            -webkit-backdrop-filter: blur(45px) saturate(180%);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: all 0.5s cubic-bezier(0.2, 1, 0.2, 1);
         }
         .glass:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(61, 90, 254, 0.4);
+            transform: translateY(-4px) scale(1.01);
+            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
         }
 
         .mx-gradient { background: linear-gradient(135deg, #3d5afe, #00e5ff); }
@@ -81,16 +81,16 @@
         .hidden-left { transform: translateX(-50%); opacity: 0; pointer-events: none; }
         .hidden-right { transform: translateX(50%); opacity: 0; pointer-events: none; }
 
-        /* Bottom Nav */
+        /* Nav System */
         .bottom-nav {
             padding-bottom: var(--safe-bottom);
             height: calc(85px + var(--safe-bottom));
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-            backdrop-filter: blur(20px);
+            background: linear-gradient(to top, #000 85%, transparent);
+            backdrop-filter: blur(30px);
+            border-top: 1px solid rgba(255,255,255,0.05);
         }
-
         .nav-item.active { color: #00e5ff; }
-        .nav-item.active i { transform: translateY(-8px) scale(1.1); filter: drop-shadow(0 0 12px #00e5ff); }
+        .nav-item.active i { transform: translateY(-10px) scale(1.1); filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.5)); }
         .nav-item i { transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
 
         /* Cards */
@@ -232,13 +232,10 @@
         
         <!-- Home Page -->
         <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-12 pt-8">
+            <div class="glow-bg"></div>
             
             <!-- Welcome Header (Clean & Professional) -->
             <div class="space-y-3 mt-4">
-                <div class="flex items-center space-x-3">
-                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]"></span>
-                    <span id="welcome-text" class="text-white/40 text-[10px] font-bold uppercase tracking-[4px]">Verified Member</span>
-                </div>
                 <h2 class="text-5xl font-black tracking-tighter leading-[0.9]"><span class="text-white">Premium</span> <br> <span class="text-gradient">Live TV Hub</span></h2>
             </div>
 
