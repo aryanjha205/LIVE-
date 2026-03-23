@@ -123,7 +123,11 @@ async function verifyOTP() {
         
         currentUser = data.user;
         localStorage.setItem('user', JSON.stringify(currentUser));
-        authOverlay.classList.add('hidden');
+        
+        // Use explicit style to override CSS specificity
+        authOverlay.style.display = 'none';
+        
+        switchPage('home'); // Explicitly show home page
         updateUIWithUser();
         fetchChannels();
         showToast("Welcome to Live+!");
@@ -436,7 +440,8 @@ if (screen.orientation) {
 // Init
 async function init() {
     if (currentUser) {
-        authOverlay.classList.add('hidden');
+        authOverlay.style.display = 'none';
+        switchPage('home');
         updateUIWithUser();
         fetchChannels();
     }
