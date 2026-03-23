@@ -38,7 +38,7 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 async function fetchChannels(retryCount = 0) {
     console.log(`Fetching channels (Attempt ${retryCount + 1})...`);
     const loadingElem = document.getElementById('category-rows');
-    if (loadingElem && retryCount === 0) loadingElem.innerHTML = '<div class="py-20 text-center opacity-40"><div class="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div><p class="text-xs font-bold uppercase tracking-[3px]">Loading TV Hub...</p></div>';
+    if (loadingElem && retryCount === 0) loadingElem.innerHTML = '<div class="py-20 text-center opacity-40"><div class="premium-loader mx-auto mb-6"></div><p class="text-[10px] font-bold uppercase tracking-[4px]">Initializing Premium Experience...</p></div>';
     
     try {
         const response = await fetch('/api/channels');
@@ -337,21 +337,21 @@ function createCategoryRow(title, itemArray) {
     const slider = row.querySelector('.no-scrollbar');
     itemArray.forEach(ch => {
         const item = document.createElement('div');
-        item.className = 'min-w-[240px] sm:min-w-[320px] snap-start';
+        item.className = 'min-w-[280px] sm:min-w-[340px] snap-start py-4';
         item.onclick = () => openPlayer(ch);
         item.innerHTML = `
-            <div class="channel-card glass border-white/5 relative group p-5 rounded-[36px] overflow-hidden active:scale-95 transition-all">
-                <div class="flex items-center space-x-5 relative z-10">
-                    <div class="w-16 h-16 rounded-[24px] bg-white/5 p-3 flex items-center justify-center border border-white/10 group-hover:border-blue-500/30 transition-all">
+            <div class="channel-card glass border-white/[0.03] group p-6 hover:border-indigo-500/30">
+                <div class="flex items-center space-x-6 relative z-10">
+                    <div class="w-20 h-20 rounded-[28px] bg-white/[0.03] p-4 flex items-center justify-center border border-white/5 group-hover:border-indigo-500/20 group-hover:bg-white/[0.05] transition-all duration-500 shadow-xl">
                         <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
                     </div>
                     <div class="flex-grow min-w-0">
-                        <h4 class="text-white font-black text-sm truncate uppercase tracking-tight">${ch.name}</h4>
-                        <p class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${ch.group}</p>
+                        <p class="text-[9px] text-indigo-400 font-black uppercase tracking-[3px] mb-1.5">${ch.group}</p>
+                        <h4 class="text-white font-black text-lg truncate tracking-tight group-hover:text-indigo-100 transition-colors uppercase italic">${ch.name}</h4>
                     </div>
-                    <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600 shadow-lg translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
-                        <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
-                    </div>
+                </div>
+                <div class="absolute right-6 bottom-6 w-12 h-12 rounded-2xl mx-gradient flex items-center justify-center shadow-lg transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                    <i data-lucide="play" class="w-6 h-6 text-white fill-white ml-1"></i>
                 </div>
             </div>
         `;
@@ -370,22 +370,22 @@ function renderExplore(list = channels) {
     // Show ALL channels in Explore
     list.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
+        item.className = 'glass p-6 rounded-[32px] flex items-center space-x-5 shadow-lg hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer border border-white/[0.03] group relative overflow-hidden';
         item.innerHTML = `
-            <div class="relative w-12 h-12 flex-shrink-0">
-                <img src="${c.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
-                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full shadow-lg"></div>
+            <div class="relative w-14 h-14 flex-shrink-0">
+                <img src="${c.logo}" class="w-full h-full rounded-[20px] object-contain bg-white/5 border border-white/5 shadow-inner" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-black rounded-full shadow-lg"></div>
             </div>
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</span>
-                <span class="text-[9px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${c.group}</span>
+                <span class="font-black text-md truncate uppercase tracking-tight text-white/90 group-hover:text-indigo-300 transition-colors">${c.name}</span>
+                <span class="text-[10px] text-indigo-400/60 font-black uppercase tracking-[3px] mt-1">${c.group}</span>
             </div>
-            <div class="flex items-center space-x-2">
-                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl opacity-40 hover:opacity-100 transition">
-                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
+            <div class="flex items-center space-x-3">
+                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl border-white/5 hover:border-red-500/20 transition-all">
+                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : 'text-white/20'}"></i>
                 </button>
-                <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600/30 transition">
-                    <i data-lucide="play" class="w-4 h-4 text-blue-500 fill-blue-500"></i>
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover:bg-indigo-500 group-hover:border-transparent transition-all shadow-indigo-500/20 group-hover:shadow-lg">
+                    <i data-lucide="play" class="w-5 h-5 text-indigo-400 fill-indigo-400 group-hover:text-white group-hover:fill-white transition-all ml-1"></i>
                 </div>
             </div>
         `;
@@ -655,12 +655,13 @@ function renderRecent() {
     
     recents.forEach((c, idx) => {
         const item = document.createElement('div');
-        item.className = 'flex-shrink-0 w-20 text-center space-y-2 cursor-pointer active:scale-95 transition';
+        item.className = 'flex-shrink-0 w-24 text-center space-y-3 cursor-pointer group';
         item.innerHTML = `
-            <div class="w-16 h-16 rounded-2xl glass p-1 mx-auto overflow-hidden">
-                <img src="${c.logo}" class="w-full h-full object-cover rounded-xl" onerror="this.src='/static/icon-192.png'">
+            <div class="w-20 h-20 rounded-[28px] glass p-1 mx-auto overflow-hidden relative border-white/5 group-hover:border-indigo-500/40 group-hover:scale-105 transition-all duration-500 active:scale-95 shadow-xl">
+                <img src="${c.logo}" class="w-full h-full object-contain rounded-[24px] bg-white/[0.02]" onerror="this.src='/static/icon-192.png'">
+                <div class="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </div>
-            <p class="text-[10px] font-bold truncate opacity-60 px-1">${c.name}</p>
+            <p class="text-[10px] font-black uppercase italic tracking-tighter text-white/40 group-hover:text-white transition-colors px-1 truncate">${c.name}</p>
         `;
         item.onclick = () => openPlayer(c);
         scroll.appendChild(item);
@@ -694,10 +695,12 @@ function showToast(msg, type='info') {
     const t = document.getElementById('global-toast');
     t.innerText = msg;
     t.style.opacity = '1';
-    t.style.top = '10%';
+    t.style.top = '12%';
+    t.style.transform = 'translateX(-50%) translateY(0)';
     setTimeout(() => {
         t.style.opacity = '0';
-        t.style.top = '8%';
+        t.style.top = '10%';
+        t.style.transform = 'translateX(-50%) translateY(-10px)';
     }, 3000);
 }
 
