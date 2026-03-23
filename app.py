@@ -231,7 +231,7 @@ def get_channels():
              if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
              return jsonify([{"name": "Temporarily Unavailable", "group": "System", "url": "", "logo": ""}])
              
-        CHANNELS_CACHE = parsed[:400]
+        CHANNELS_CACHE = parsed[:1000]
         CACHE_TIME = now
         return jsonify(CHANNELS_CACHE)
     except Exception as e:

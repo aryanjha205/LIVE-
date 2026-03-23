@@ -239,28 +239,11 @@
                 <h2 class="text-5xl font-black tracking-tighter leading-[0.9]"><span class="text-white">Premium</span> <br> <span class="text-gradient">Live TV Hub</span></h2>
             </div>
 
-            <!-- Recently Watched -->
-            <div id="recent-section" class="space-y-6 hidden">
-                <div class="flex items-center justify-between px-1">
-                    <h3 class="text-xl font-black text-white/90">Recently Watched</h3>
-                </div>
-                <div id="recent-scroll" class="flex space-x-5 overflow-x-auto pb-4 no-scrollbar">
-                    <!-- Injected by JS -->
-                </div>
+            <!-- Dynamic Category Rows (MX Player Style) -->
+            <div id="category-rows" class="space-y-12 pb-10">
+                <!-- Rows injected by JavaScript -->
             </div>
 
-            <!-- Discover Grid -->
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-black tracking-tight text-white/90">Discover</h3>
-                    <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-black uppercase tracking-[3px] cursor-pointer">Explore All</span>
-                </div>
-                <div id="featured-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    <!-- Injected by JS -->
-                    <div class="skeleton h-32 rounded-[32px]"></div>
-                    <div class="skeleton h-32 rounded-[32px]"></div>
-                </div>
-            </div>
         </div>
 
         <!-- Explore Page -->

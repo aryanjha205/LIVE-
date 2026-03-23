@@ -260,29 +260,64 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    const grid = document.getElementById('featured-grid');
-    if (!grid || !channels.length) return;
+    const container = document.getElementById('category-rows');
+    if (!container || !channels.length) return;
+    container.innerHTML = '';
     
-    grid.innerHTML = '';
-    // Show top 32 channels on Home as "Discover"
-    channels.slice(0, 32).forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'channel-card glass p-4 flex items-center space-x-4 active:scale-95 transition cursor-pointer border border-white/5 relative overflow-hidden group';
-        card.innerHTML = `
-            <div class="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition"></div>
-            <img src="${c.logo}" class="w-14 h-14 rounded-2xl object-cover bg-white/5 relative z-10" onerror="this.src='/static/icon-192.png'">
-            <div class="flex-grow min-w-0 relative z-10">
-                <h4 class="font-black text-sm truncate uppercase tracking-tight text-white/90">${c.name}</h4>
-                <p class="text-[9px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${c.group}</p>
-            </div>
-            <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="relative z-20 p-2 text-white/20 hover:text-red-500 transition">
-                <i data-lucide="heart" class="w-5 h-5 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : ''}"></i>
-            </button>
-        `;
-        card.onclick = () => openPlayer(c);
-        grid.appendChild(card);
+    // Group 1: Recently Watched
+    const recent = JSON.parse(localStorage.getItem('recent_channels') || '[]');
+    if (recent.length > 0) {
+        container.appendChild(createCategoryRow('Recently Watched', recent));
+    }
+
+    // Grouping all channels by category
+    const categories = {};
+    channels.forEach(ch => {
+        const cat = ch.group || 'General';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(ch);
     });
-    lucide.createIcons();
+
+    // Sort categories by popularity (number of channels) and render top 12
+    Object.keys(categories)
+        .sort((a,b) => categories[b].length - categories[a].length)
+        .slice(0, 12)
+        .forEach(catName => {
+            container.appendChild(createCategoryRow(catName, categories[catName].slice(0, 40)));
+        });
+}
+
+function createCategoryRow(title, itemArray) {
+    const row = document.createElement('div');
+    row.className = 'space-y-6';
+    row.innerHTML = `
+        <div class="flex items-center justify-between px-1">
+            <h3 class="text-xl font-black text-white/90 tracking-tight">${title}</h3>
+            <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-bold uppercase tracking-[3px] cursor-pointer hover:underline">View All</span>
+        </div>
+        <div class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar snap-x snap-mandatory">
+            ${itemArray.map(ch => `
+                <div class="min-w-[280px] sm:min-w-[320px] snap-start" onclick='openPlayer(${JSON.stringify(ch)})'>
+                    <div class="channel-card glass border-white/5 relative group p-5 rounded-[36px] overflow-hidden active:scale-95 transition-all">
+                        <div class="flex items-center space-x-5 relative z-10">
+                            <div class="w-16 h-16 rounded-[24px] bg-white/5 p-3 flex items-center justify-center border border-white/10 group-hover:border-blue-500/30 transition-all">
+                                <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <h4 class="text-white font-black text-sm truncate uppercase tracking-tight">${ch.name}</h4>
+                                <p class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${ch.group}</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600 shadow-lg translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
+                                <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    lucide.createIcons({ scope: row });
+    return row;
 }
 
 function renderExplore(list = channels) {
