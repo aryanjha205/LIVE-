@@ -7,6 +7,7 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import time
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -46,7 +47,9 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://raw.githubusercontent.com/LaneSh44/SamsungTVPlus-M3U/main/SamsungTVPlus-India.m3u"
+PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
+CHANNELS_CACHE = []
+CACHE_TIME = 0
 
 # Helper: Parse M3U
 def parse_m3u(file_content):
@@ -211,26 +214,30 @@ def favicon():
 
 @app.route('/api/channels')
 def get_channels():
+    global CHANNELS_CACHE, CACHE_TIME
     try:
-        # Check if we can use a smaller playlist or limit the current one
-        # The main playlist is huge; we try to fetch it but limit processing
-        response = requests.get(PLAYLIST_URL, timeout=15)
+        now = time.time()
+        # Serve from cache if available and not expired (1 hour)
+        if CHANNELS_CACHE and (now - CACHE_TIME < 3600):
+            return jsonify(CHANNELS_CACHE)
+
+        response = requests.get(PLAYLIST_URL, timeout=10)
         if not response.ok:
-            print(f"IPTV FETCH FAILED: {response.status_code}")
-            return jsonify({"error": f"IPTV provider error: {response.status_code}"}), 502
+            if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
+            return jsonify([{"name": "Server Unavailable", "group": "System", "url": "", "logo": ""}])
             
-        # Optimization: only parse first 1000 lines if it's too large, or handle with care
-        # For now, let's parse and return first 500 channels for performance
-        channels = parse_m3u(response.text)
-        
-        if not channels:
-            return jsonify([{"name": "No Channels Found", "group": "Info", "url": "", "logo": ""}])
-            
-        # Return a manageable amount for mobile apps
-        return jsonify(channels[:500])
+        parsed = parse_m3u(response.text)
+        if not parsed:
+             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
+             return jsonify([{"name": "Temporarily Unavailable", "group": "System", "url": "", "logo": ""}])
+             
+        CHANNELS_CACHE = parsed[:400]
+        CACHE_TIME = now
+        return jsonify(CHANNELS_CACHE)
     except Exception as e:
         print(f"FETCH ERROR: {e}")
-        return jsonify({"error": f"Failed to load IPTV list: {str(e)}"}), 500
+        if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
+        return jsonify({"error": "Stream server timed out. Please refresh."}), 500
 
 @app.route('/service-worker.js')
 def sw():
