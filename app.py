@@ -46,8 +46,9 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-# Movie API Source
+# Movie & Show API Sources
 MOVIE_API_URL = "https://yts.mx/api/v2/list_movies.json"
+SHOWS_API_URL = "https://api.tvmaze.com/shows"
 
 # Helper: Filter Movies
 def clean_movie_data(movie_list):
@@ -257,6 +258,29 @@ def get_discover():
         return jsonify(clean_movie_data(movies))
     except Exception as e:
         print(f"DISCOVER ERROR: {e}")
+        return jsonify([])
+
+@app.route('/api/shows/popular')
+def get_popular_shows():
+    try:
+        # TVMaze public trending/shows
+        response = requests.get(f"{SHOWS_API_URL}?page=0", timeout=10)
+        shows = response.json()
+        cleaned = []
+        for s in shows[:15]:
+            cleaned.append({
+                "id": s.get("id"),
+                "name": s.get("name"),
+                "logo": (s.get("image") or {}).get("medium", ""),
+                "image": (s.get("image") or {}).get("original", ""),
+                "rating": (s.get("rating") or {}).get("average", "N/A"),
+                "year": (s.get("premiered") or "N/A")[:4],
+                "genres": s.get("genres", []),
+                "summary": s.get("summary", "").replace("<p>", "").replace("</p>", "").replace("<b>", "").replace("</b>", ""),
+                "type": "show"
+            })
+        return jsonify(cleaned)
+    except Exception as e:
         return jsonify([])
 
 @app.route('/service-worker.js')

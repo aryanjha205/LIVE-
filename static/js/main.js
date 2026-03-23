@@ -22,6 +22,7 @@ let movies = [];
 let trendingMovies = []; // For Hero/Discover
 let popularMovies = [];
 let topMovies = [];
+let popularShows = [];
 let hls = null;
 let isLocked = false;
 let currentAspectRatio = 'fill';
@@ -29,6 +30,9 @@ let rotation = 0;
 let controlsTimeout;
 let startY = 0;
 let isRightSide = false;
+let currentHeroIndex = 0;
+let heroInterval;
+const genres = ["All", "Action", "Comedy", "Drama", "Horror", "Sci-Fi", "Romance", "Mystery", "Animation"];
 
 // User state
 let currentUser = JSON.parse(localStorage.getItem('user')) || null;
@@ -40,22 +44,35 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 async function fetchMovies() {
     console.log("Fetching movies...");
     try {
-        const [m, d, p, r] = await Promise.all([
+        const [m, d, p, r, s] = await Promise.all([
             fetch('/api/movies').then(r => r.json()),
             fetch('/api/discover').then(r => r.json()),
             fetch('/api/movies/popular').then(r => r.json()),
-            fetch('/api/movies/rating').then(r => r.json())
+            fetch('/api/movies/rating').then(r => r.json()),
+            fetch('/api/shows/popular').then(r => r.json())
         ]);
         
         movies = m;
         trendingMovies = d;
         popularMovies = p;
         topMovies = r;
+        popularShows = s;
         
+        renderGenres();
         renderHome();
         renderExplore();
         renderFavorites();
         renderRecent();
+        startHeroAutoSlide();
+        
+        // Hide Splash
+        setTimeout(() => {
+            const spl = document.getElementById('splash');
+            if (spl) {
+                spl.style.opacity = '0';
+                setTimeout(() => spl.style.display = 'none', 1000);
+            }
+        }, 1500);
     } catch (error) {
         console.error('Movie Fetch ERROR:', error);
         showToast('Server Unreachable', 'error');
@@ -258,6 +275,54 @@ async function saveProfile() {
     }
 }
 
+// --- NAVIGATION & CATEGORIES ---
+
+function openDrawer() {
+    document.getElementById('side-drawer').classList.remove('-translate-x-full');
+    document.getElementById('drawer-overlay').classList.remove('hidden');
+}
+
+function closeDrawer() {
+    document.getElementById('side-drawer').classList.add('-translate-x-full');
+    document.getElementById('drawer-overlay').classList.add('hidden');
+}
+
+function renderGenres() {
+    const container = document.getElementById('genre-scroll');
+    if (!container) return;
+    container.innerHTML = '';
+    genres.forEach(g => {
+        const chip = document.createElement('button');
+        chip.className = `flex-shrink-0 px-6 py-2.5 rounded-full border border-white/10 glass text-[10px] font-black uppercase tracking-[2px] transition active:scale-95 ${g === 'All' ? 'bg-blue-600 border-blue-500' : ''}`;
+        chip.textContent = g;
+        chip.onclick = (e) => {
+            container.querySelectorAll('button').forEach(b => b.classList.remove('bg-blue-600', 'border-blue-500'));
+            chip.classList.add('bg-blue-600', 'border-blue-500');
+            filterByGenre(g);
+        };
+        container.appendChild(chip);
+    });
+}
+
+function startHeroAutoSlide() {
+    if (heroInterval) clearInterval(heroInterval);
+    heroInterval = setInterval(() => {
+        currentHeroIndex = (currentHeroIndex + 1) % trendingMovies.length;
+        renderHome(true); // true means hero only
+    }, 8000);
+}
+
+function filterByGenre(genre) {
+    if (genre === 'All') {
+        renderHome();
+        return;
+    }
+    // Simple filter for the rails (demonstration)
+    const filtered = movies.filter(m => m.genres.some(g => g.toLowerCase().includes(genre.toLowerCase())));
+    const trendingRail = document.getElementById('trending-rail');
+    renderRail(trendingRail, filtered.slice(0, 15));
+}
+
 function changeAvatar() {
     const newAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`;
     currentUser.avatar = newAvatar;
@@ -266,44 +331,55 @@ function changeAvatar() {
 
 // --- RENDERING ---
 
-function renderHome() {
+function renderHome(heroOnly = false) {
     const hero = document.getElementById('hero-banner');
     const trendingRail = document.getElementById('trending-rail');
     const popularRail = document.getElementById('popular-rail');
+    const showsRail = document.getElementById('shows-rail');
     const ratedRail = document.getElementById('rated-rail');
     
     if (!hero || !trendingRail) return;
 
     // 1. Render Hero Banner
-    const heroMovie = trendingMovies[0] || movies[0];
+    const heroMovie = trendingMovies[currentHeroIndex] || movies[0];
     if (heroMovie) {
         hero.innerHTML = `
-            <img src="${heroMovie.image}" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-            <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent"></div>
-            <div class="absolute bottom-12 left-12 space-y-4 max-w-2xl">
-                <div class="flex items-center space-x-3">
-                    <span class="px-3 py-1 bg-blue-600 text-[10px] font-black uppercase rounded-lg">MX Exclusive</span>
-                    <span class="text-white/60 text-xs font-bold underline decoration-blue-500/50">${heroMovie.genres.join(', ')}</span>
-                </div>
-                <h1 class="text-6xl font-black tracking-tighter text-gradient">${heroMovie.name}</h1>
-                <p class="text-white/40 text-sm line-clamp-2">${heroMovie.summary}</p>
-                <div class="flex items-center space-x-4 pt-4">
-                    <button onclick='openPlayer(${JSON.stringify(heroMovie)})' class="px-8 py-4 bg-white text-black rounded-2xl font-black flex items-center space-x-3 hover:scale-105 transition">
-                        <i data-lucide="play" class="w-5 h-5 fill-black"></i>
-                        <span>Start Watching</span>
-                    </button>
-                    <button onclick="toggleFavorite(event, '${heroMovie.name}')" class="p-4 glass rounded-2xl text-white active:scale-95 transition">
-                        <i data-lucide="plus" class="w-6 h-6"></i>
-                    </button>
+            <div class="absolute inset-0 animate-in fade-in duration-1000">
+                <img src="${heroMovie.image}" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent"></div>
+                <div class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#050505] to-transparent"></div>
+                <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent"></div>
+                <div class="absolute bottom-16 left-6 right-6 sm:left-12 space-y-4 max-w-2xl px-2">
+                    <div class="flex items-center space-x-3">
+                        <span class="px-3 py-1 bg-blue-600 text-[9px] font-black uppercase rounded-lg shadow-xl shadow-blue-500/20">MX Premier</span>
+                        <span class="text-white/60 text-[10px] font-black uppercase tracking-widest">${heroMovie.genres.join(' &bull; ')}</span>
+                    </div>
+                    <h1 class="text-4xl sm:text-6xl font-black tracking-tighter text-gradient leading-[0.9]">${heroMovie.name}</h1>
+                    <p class="text-white/40 text-xs sm:text-sm line-clamp-2 max-w-lg mb-4 leading-relaxed">${heroMovie.summary}</p>
+                    <div class="flex items-center space-x-4 pt-4">
+                        <button onclick='openPlayer(${JSON.stringify(heroMovie)})' class="px-10 py-4 bg-white text-black rounded-2xl font-black flex items-center space-x-3 hover:scale-105 active:scale-95 transition-all shadow-2xl">
+                            <i data-lucide="play" class="w-5 h-5 fill-black"></i>
+                            <span class="uppercase tracking-widest text-xs">Watch Now</span>
+                        </button>
+                    </div>
                 </div>
             </div>
+            <!-- Progress Dots -->
+            <div class="absolute bottom-6 right-12 flex space-x-2">
+                ${trendingMovies.map((_, i) => `<div class="w-1.5 h-1.5 rounded-full transition-all duration-500 ${i === currentHeroIndex ? 'bg-blue-500 w-8' : 'bg-white/20'}"></div>`).join('')}
+            </div>
         `;
+    }
+    
+    if (heroOnly) {
+        lucide.createIcons();
+        return;
     }
 
     // 2. Render Rails
     renderRail(trendingRail, trendingMovies);
     renderRail(popularRail, popularMovies);
+    renderRail(showsRail, popularShows);
     renderRail(ratedRail, topMovies);
     
     lucide.createIcons();

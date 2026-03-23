@@ -157,6 +157,21 @@
 </head>
 <body class="bg-black text-white selection:bg-blue-500/30">
 
+    <!-- Cinematic Splash Screen -->
+    <div id="splash" class="fixed inset-0 bg-black z-[2000] flex flex-col items-center justify-center transition-opacity duration-1000">
+        <div class="w-24 h-24 mx-gradient rounded-full flex items-center justify-center shadow-2xl animate-pulse">
+            <div class="w-0 h-0 border-t-[15px] border-t-transparent border-l-[25px] border-l-white border-b-[15px] border-b-transparent ml-2"></div>
+        </div>
+        <h1 class="mt-8 text-3xl font-black tracking-tighter text-gradient animate-in slide-in-from-bottom duration-1000">MX GOLD</h1>
+        <div class="mt-4 w-12 h-1 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full bg-blue-600 animate-progress w-0"></div>
+        </div>
+    </div>
+    <style>
+        @keyframes progress { 0% { width: 0; } 100% { width: 100%; } }
+        .animate-progress { animation: progress 2.5s ease-in-out forwards; }
+    </style>
+
     <div id="auth-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-2xl z-[1000] flex items-center justify-center p-6 sm:p-10">
         <!-- Background elements for visual flair -->
         <div class="absolute w-[80%] aspect-square bg-blue-600/20 blur-[150px] rounded-full top-0 left-[-20%] animate-pulse"></div>
@@ -206,21 +221,57 @@
         </div>
     </div>
 
-    <!-- App Header (Library View) -->
-    <header id="lib-header" class="px-6 pt-[var(--safe-top)] pb-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-md z-40 border-b border-white/5">
-        <div class="flex items-center space-x-2">
-            <div class="w-8 h-8 mx-gradient rounded-full flex items-center justify-center">
-                <div class="w-0 h-0 border-t-[4px] border-t-transparent border-l-[7px] border-l-white border-b-[4px] border-b-transparent ml-0.5"></div>
+    <!-- Sidebar Container -->
+    <div id="side-drawer" class="fixed inset-y-0 left-0 w-80 bg-[#0a0a0b]/95 backdrop-blur-3xl z-[1500] -translate-x-full transition-transform duration-500 ease-in-out border-r border-white/5">
+        <div class="p-8 space-y-12">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 mx-gradient rounded-full flex items-center justify-center shadow-lg transform rotate-12">
+                    <div class="w-0 h-0 border-t-[5px] border-t-transparent border-l-[10px] border-l-white border-b-[5px] border-b-transparent ml-1"></div>
+                </div>
+                <h1 class="text-2xl font-black tracking-tighter">MX <span class="text-blue-500">GOLD</span></h1>
             </div>
-            <h1 class="text-xl font-black tracking-tight">MX<span class="text-blue-500">PLAYER</span></h1>
+
+            <nav class="space-y-6">
+                <button onclick="switchPage('home'); closeDrawer()" class="flex items-center space-x-4 w-full p-4 rounded-2xl hover:bg-white/5 transition group">
+                    <i data-lucide="home" class="w-6 h-6 text-white/40 group-hover:text-blue-500 transition"></i>
+                    <span class="font-bold">Home Page</span>
+                </button>
+                <button onclick="switchPage('explore'); closeDrawer()" class="flex items-center space-x-4 w-full p-4 rounded-2xl hover:bg-white/5 transition group">
+                    <i data-lucide="film" class="w-6 h-6 text-white/40 group-hover:text-blue-500 transition"></i>
+                    <span class="font-bold">Original Content</span>
+                </button>
+                <button onclick="switchPage('favorites'); closeDrawer()" class="flex items-center space-x-4 w-full p-4 rounded-2xl hover:bg-white/5 transition group">
+                    <i data-lucide="bookmark" class="w-6 h-6 text-white/40 group-hover:text-blue-500 transition"></i>
+                    <span class="font-bold">My Watchlist</span>
+                </button>
+            </nav>
+
+            <div class="pt-8 border-t border-white/5 space-y-4">
+                <p class="text-[10px] text-white/20 font-black uppercase tracking-widest pl-4">Account Settings</p>
+                <button onclick="logout()" class="flex items-center space-x-4 w-full p-4 rounded-2xl transition text-red-500/60 hover:text-red-500">
+                    <i data-lucide="log-out" class="w-6 h-6"></i>
+                    <span class="font-bold">Log Out</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="drawer-overlay" class="fixed inset-0 bg-black/60 z-[1400] hidden backdrop-blur-sm" onclick="closeDrawer()"></div>
+
+    <!-- App Header (App View) -->
+    <header id="lib-header" class="px-6 pt-[var(--safe-top)] pb-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-md z-40">
+        <div class="flex items-center space-x-4">
+            <button onclick="openDrawer()" class="p-2.5 rounded-full hover:bg-white/5 transition active:scale-90">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            <h1 class="text-2xl font-black tracking-tighter">MX <span class="text-blue-500">PLAYER</span></h1>
         </div>
         <div class="flex items-center space-x-4">
-            <button onclick="toggleSearch()" class="p-2.5 rounded-full glass hover:bg-white/10">
-                <i data-lucide="search" class="w-5 h-5"></i>
+            <button onclick="toggleSearch()" class="p-3 rounded-full glass hover:bg-white/10 transition">
+                <i data-lucide="search" class="w-5 h-5 text-blue-500"></i>
             </button>
-            <button onclick="switchPage('settings')" class="w-10 h-10 rounded-full border-2 border-blue-500/30 p-0.5 overflow-hidden active:scale-90 transition">
+            <div onclick="switchPage('settings')" class="w-10 h-10 rounded-full border-2 border-blue-500/30 p-0.5 overflow-hidden active:scale-90 transition cursor-pointer">
                 <img id="user-avatar-small" src="https://api.dicebear.com/7.x/avataaars/svg?seed=placeholder" class="w-full h-full rounded-full" alt="User">
-            </button>
+            </div>
         </div>
     </header>
 
@@ -236,13 +287,20 @@
                  <div class="skeleton w-full h-full"></div>
             </div>
 
+            <!-- Genre Tabs Chips -->
+            <div class="px-6 -mt-8 relative z-10">
+                <div id="genre-scroll" class="flex space-x-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
             <!-- Rails Container -->
             <div class="px-6 space-y-14">
                 
                 <!-- Personalised Welcome -->
-                <div class="space-y-1 pt-4">
+                <div class="space-y-1">
                     <p id="welcome-text" class="text-blue-500 text-[10px] font-black uppercase tracking-[5px]"></p>
-                    <h2 class="text-3xl font-black text-gradient">Recommended For You</h2>
+                    <h2 class="text-3xl font-black text-gradient">Handpicked For You</h2>
                 </div>
 
                 <!-- Recently Watched -->
@@ -266,6 +324,14 @@
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-white px-1">Popular on MX</h3>
                     <div id="popular-rail" class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Popular TV Shows -->
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-white px-1">Must-Watch TV Shows</h3>
+                    <div id="shows-rail" class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
                         <!-- Injected by JS -->
                     </div>
                 </div>
