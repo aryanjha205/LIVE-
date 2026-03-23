@@ -44,7 +44,7 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 async function fetchMovies() {
     console.log("Fetching movies...");
     try {
-        const [m, d, p, r, s] = await Promise.all([
+        const results = await Promise.allSettled([
             fetch('/api/movies').then(r => r.json()),
             fetch('/api/discover').then(r => r.json()),
             fetch('/api/movies/popular').then(r => r.json()),
@@ -52,12 +52,17 @@ async function fetchMovies() {
             fetch('/api/shows/popular').then(r => r.json())
         ]);
         
-        movies = m;
-        trendingMovies = d;
-        popularMovies = p;
-        topMovies = r;
-        popularShows = s;
+        // Map individual results
+        movies = results[0].status === 'fulfilled' ? results[0].value : [];
+        trendingMovies = results[1].status === 'fulfilled' ? results[1].value : [];
+        popularMovies = results[2].status === 'fulfilled' ? results[2].value : [];
+        topMovies = results[3].status === 'fulfilled' ? results[3].value : [];
+        popularShows = results[4].status === 'fulfilled' ? results[4].value : [];
         
+        if (results.some(r => r.status === 'rejected')) {
+            console.warn('Some API feeds failed to load');
+        }
+
         renderGenres();
         renderHome();
         renderExplore();
@@ -65,17 +70,20 @@ async function fetchMovies() {
         renderRecent();
         startHeroAutoSlide();
         
-        // Hide Splash
-        setTimeout(() => {
-            const spl = document.getElementById('splash');
-            if (spl) {
-                spl.style.opacity = '0';
-                setTimeout(() => spl.style.display = 'none', 1000);
-            }
-        }, 1500);
+        // Hide Splash regardless
+        setTimeout(hideSplash, 1500);
     } catch (error) {
-        console.error('Movie Fetch ERROR:', error);
-        showToast('Server Unreachable', 'error');
+        console.error('Core Fetch ERROR:', error);
+        showToast('System Error', 'error');
+        setTimeout(hideSplash, 2000);
+    }
+}
+
+function hideSplash() {
+    const spl = document.getElementById('splash');
+    if (spl) {
+        spl.style.opacity = '0';
+        setTimeout(() => spl.style.display = 'none', 1000);
     }
 }
 
