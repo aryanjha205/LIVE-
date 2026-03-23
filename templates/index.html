@@ -156,6 +156,9 @@
             display: none;
         }
         .lock-overlay.active { display: block; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-black text-white selection:bg-blue-500/30">
@@ -351,6 +354,13 @@
     <!-- Fullscreen Player View -->
     <div id="player-view" class="player-fullscreen">
         <video id="video" class="fill" playsinline></video>
+        <div id="player-loader" class="absolute inset-0 z-[115] flex items-center justify-center bg-black/50 backdrop-blur-sm hidden">
+            <div class="relative w-24 h-24">
+                <div class="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+                <div class="absolute inset-4 bg-blue-500/10 rounded-full animate-pulse blur-xl"></div>
+            </div>
+        </div>
         <div id="lock-overlay" class="lock-overlay" onclick="onLockedScreenTouched()"></div>
         <div id="controls" class="absolute inset-0 z-[110] flex flex-col justify-between p-6 bg-gradient-to-b from-black/80 via-transparent to-black/80">
             <!-- Controls remain the same as previous version but styled cleaner -->

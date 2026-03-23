@@ -47,7 +47,7 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://raw.githubusercontent.com/LaneSh44/SamsungTVPlus-M3U/main/SamsungTVPlus-India.m3u"
+PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
 CHANNELS_CACHE = []
 CACHE_TIME = 0
 
@@ -63,7 +63,7 @@ def parse_m3u(file_content):
         
         if line.startswith("#EXTINF:"):
             # Robust parsing for logo and group
-            current = {"logo": "", "group": "General", "name": "Unnamed"}
+            current = {"logo": "", "group": "General", "name": "Unnamed", "headers": {}}
             
             # Extract attributes using regex
             logo_match = re.search(r'tvg-logo="([^"]+)"', line)
@@ -77,10 +77,21 @@ def parse_m3u(file_content):
             if len(parts) > 1:
                 current["name"] = parts[-1].strip()
         
+        elif line.startswith("#EXTVLCOPT:"):
+            # Handle user-agent and referer options
+            ua_match = re.search(r'http-user-agent=([^ ]+)', line)
+            if ua_match and current:
+                current["headers"]["User-Agent"] = ua_match.group(1)
+            ref_match = re.search(r'http-referrer=([^ ]+)', line)
+            if ref_match and current:
+                current["headers"]["Referer"] = ref_match.group(1)
+                
         elif line.startswith("http") and current:
-            current["url"] = line
-            if current["url"] and current["name"] != "Unnamed":
-                channels.append(current)
+            # Filter for HTTPS to prevent mixed content issues on Vercel/HTTPS
+            if line.startswith("https://"):
+                current["url"] = line
+                if current["name"] != "Unnamed":
+                    channels.append(current)
             current = {}
             
     return channels

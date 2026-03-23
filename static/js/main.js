@@ -9,6 +9,7 @@ const allChannelsList = document.getElementById('all-channels-list');
 const favoritesList = document.getElementById('favorites-list');
 const searchResults = document.getElementById('search-results');
 const globalSearch = document.getElementById('global-search');
+const playerLoader = document.getElementById('player-loader');
 const searchModal = document.getElementById('search-modal');
 
 // Auth elements
@@ -303,7 +304,7 @@ function createCategoryRow(title, itemArray) {
     const slider = row.querySelector('.no-scrollbar');
     itemArray.forEach(ch => {
         const item = document.createElement('div');
-        item.className = 'min-w-[280px] sm:min-w-[320px] snap-start';
+        item.className = 'min-w-[240px] sm:min-w-[320px] snap-start';
         item.onclick = () => openPlayer(ch);
         item.innerHTML = `
             <div class="channel-card glass border-white/5 relative group p-5 rounded-[36px] overflow-hidden active:scale-95 transition-all">
@@ -364,21 +365,66 @@ function renderExplore(list = channels) {
 // --- PLAYER LOGIC ---
 
 function openPlayer(channel) {
+    if (!channel || !channel.url) {
+        showToast("Stream URL not found", "error");
+        return;
+    }
+    
     playerView.style.display = 'block';
+    playerLoader.classList.remove('hidden');
     document.getElementById('player-channel-name').textContent = channel.name;
     
     // Feature: Add to Recent
     addToRecent(channel);
 
+    const playStream = () => {
+        playerLoader.classList.add('hidden');
+        video.play().catch(e => {
+            console.warn("Autoplay blocked or failed:", e);
+            updatePlayIcon(false);
+        });
+        updatePlayIcon(true);
+    };
+
     if (Hls.isSupported()) {
         if (hls) hls.destroy();
-        hls = new Hls();
+        hls = new Hls({
+            xhrSetup: function(xhr, url) {
+                // If the channel has custom headers (like User-Agent), we'd need a proxy
+                // because browsers don't allow setting UA. For now, we proceed normally.
+            }
+        });
         hls.loadSource(channel.url);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play(); updatePlayIcon(true); });
+        hls.on(Hls.Events.MANIFEST_PARSED, playStream);
+        hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+                console.error("HLS Fatal Error:", data);
+                playerLoader.classList.add('hidden');
+                showToast("Stream Error: " + (data.type || "Fatal"), "error");
+                switch(data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        hls.destroy();
+                        break;
+                }
+            }
+        });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = channel.url;
-        video.onloadedmetadata = () => { video.play(); updatePlayIcon(true); };
+        video.onloadedmetadata = playStream;
+        video.onerror = () => {
+            playerLoader.classList.add('hidden');
+            showToast("Native Player Error", "error");
+        };
+    } else {
+        playerLoader.classList.add('hidden');
+        showToast("Your browser does not support HLS", "error");
     }
     resetControlsTimer();
 }
