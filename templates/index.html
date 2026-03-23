@@ -228,24 +228,23 @@
     <main class="flex-grow overflow-hidden relative">
         
         <!-- Home Page -->
-        <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-8 pt-4">
-            <!-- Hero Card -->
-            <div class="relative w-full aspect-[21/9] sm:aspect-[16/7] rounded-[40px] overflow-hidden glass group shadow-2xl">
-                <img src="https://images.unsplash.com/photo-1593784991095-a205039475fe?w=1200&q=80" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" alt="Hero">
-                <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-                <div class="absolute inset-x-0 bottom-0 p-8 sm:p-12">
-                    <span id="welcome-text" class="px-4 py-1.5 rounded-full bg-blue-600/30 text-blue-300 text-[10px] font-black tracking-[4px] uppercase mb-4 inline-block backdrop-blur-md">Welcome, User</span>
-                    <h2 class="text-4xl sm:text-5xl font-black mb-2 text-gradient leading-tight">Global TV Hub</h2>
-                    <p class="text-white/50 text-base max-w-md font-medium">Discover premium content from every corner of the world in stunning clarity.</p>
+        <div id="page-home" class="page-transition absolute inset-0 overflow-y-auto px-6 pb-24 space-y-12 pt-8">
+            
+            <!-- Welcome Header (Premium Text Only) -->
+            <div class="space-y-2 mt-4">
+                <div class="flex items-center space-x-3">
+                    <span class="w-10 h-[2px] bg-blue-500 rounded-full"></span>
+                    <span id="welcome-text" class="text-blue-500 text-[10px] font-black uppercase tracking-[5px]">Welcome Back</span>
                 </div>
+                <h2 class="text-5xl font-black tracking-tighter leading-none"><span class="text-white/40">Samsung</span> <br> <span class="text-gradient">Live TV Hub</span></h2>
             </div>
 
-            <!-- Recent Watching (Dynamic) -->
-            <div id="recent-section" class="space-y-4 hidden">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-bold">Recently Watched</h3>
+            <!-- Recently Watched -->
+            <div id="recent-section" class="space-y-6 hidden">
+                <div class="flex items-center justify-between px-1">
+                    <h3 class="text-xl font-black text-white/90">Recently Watched</h3>
                 </div>
-                <div id="recent-scroll" class="flex space-x-4 overflow-x-auto pb-2">
+                <div id="recent-scroll" class="flex space-x-5 overflow-x-auto pb-4 no-scrollbar">
                     <!-- Injected by JS -->
                 </div>
             </div>

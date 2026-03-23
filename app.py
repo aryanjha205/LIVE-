@@ -46,7 +46,7 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://iptv-org.github.io/iptv/index.m3u"
+PLAYLIST_URL = "https://raw.githubusercontent.com/LaneSh44/SamsungTVPlus-M3U/main/SamsungTVPlus-Global.m3u"
 
 # Helper: Parse M3U
 def parse_m3u(file_content):
