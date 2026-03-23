@@ -295,27 +295,35 @@ function createCategoryRow(title, itemArray) {
             <h3 class="text-xl font-black text-white/90 tracking-tight">${title}</h3>
             <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-bold uppercase tracking-[3px] cursor-pointer hover:underline">View All</span>
         </div>
-        <div class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar snap-x snap-mandatory">
-            ${itemArray.map(ch => `
-                <div class="min-w-[280px] sm:min-w-[320px] snap-start" onclick='openPlayer(${JSON.stringify(ch)})'>
-                    <div class="channel-card glass border-white/5 relative group p-5 rounded-[36px] overflow-hidden active:scale-95 transition-all">
-                        <div class="flex items-center space-x-5 relative z-10">
-                            <div class="w-16 h-16 rounded-[24px] bg-white/5 p-3 flex items-center justify-center border border-white/10 group-hover:border-blue-500/30 transition-all">
-                                <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
-                            </div>
-                            <div class="flex-grow min-w-0">
-                                <h4 class="text-white font-black text-sm truncate uppercase tracking-tight">${ch.name}</h4>
-                                <p class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${ch.group}</p>
-                            </div>
-                            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600 shadow-lg translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
-                                <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('')}
+        <div class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar snap-x snap-mandatory" id="row-${title.replace(/\s+/g, '-')}">
+            <!-- Items added via JS for safety -->
         </div>
     `;
+    
+    const slider = row.querySelector('.no-scrollbar');
+    itemArray.forEach(ch => {
+        const item = document.createElement('div');
+        item.className = 'min-w-[280px] sm:min-w-[320px] snap-start';
+        item.onclick = () => openPlayer(ch);
+        item.innerHTML = `
+            <div class="channel-card glass border-white/5 relative group p-5 rounded-[36px] overflow-hidden active:scale-95 transition-all">
+                <div class="flex items-center space-x-5 relative z-10">
+                    <div class="w-16 h-16 rounded-[24px] bg-white/5 p-3 flex items-center justify-center border border-white/10 group-hover:border-blue-500/30 transition-all">
+                        <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <h4 class="text-white font-black text-sm truncate uppercase tracking-tight">${ch.name}</h4>
+                        <p class="text-[10px] text-blue-500 font-bold uppercase tracking-[2px] mt-1">${ch.group}</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center group-hover:bg-blue-600 shadow-lg translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
+                        <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+        slider.appendChild(item);
+    });
+    
     lucide.createIcons({ scope: row });
     return row;
 }
