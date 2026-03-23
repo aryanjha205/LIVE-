@@ -9,7 +9,6 @@ const allChannelsList = document.getElementById('all-channels-list');
 const favoritesList = document.getElementById('favorites-list');
 const searchResults = document.getElementById('search-results');
 const globalSearch = document.getElementById('global-search');
-const playerLoader = document.getElementById('player-loader');
 const searchModal = document.getElementById('search-modal');
 
 // Auth elements
@@ -19,7 +18,8 @@ const otpInput = document.getElementById('otp-input');
 const authStep1 = document.getElementById('auth-step-1');
 const authStep2 = document.getElementById('auth-step-2');
 
-let channels = [];
+let movies = [];
+let trendingMovies = [];
 let hls = null;
 let isLocked = false;
 let currentAspectRatio = 'fill';
@@ -35,42 +35,33 @@ let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 
 
 
-async function fetchChannels(retryCount = 0) {
-    console.log(`Fetching channels (Attempt ${retryCount + 1})...`);
-    const loadingElem = document.getElementById('category-rows');
-    if (loadingElem && retryCount === 0) loadingElem.innerHTML = '<div class="py-20 text-center opacity-40"><div class="premium-loader mx-auto mb-6"></div><p class="text-[10px] font-bold uppercase tracking-[4px]">Initializing Premium Experience...</p></div>';
-    
+async function fetchMovies() {
+    console.log("Fetching movies...");
     try {
-        const response = await fetch('/api/channels');
+        const response = await fetch('/api/movies');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        channels = await response.json();
-        console.log(`Loaded ${channels.length} channels.`);
+        movies = await response.json();
+        console.log(`Loaded ${movies.length} movies.`);
         
-        if (!channels || channels.length === 0 || channels[0].name === "Server Maintenance") {
-             if (retryCount < 2) {
-                 setTimeout(() => fetchChannels(retryCount + 1), 3000);
-                 return;
-             }
-             showToast('Service update in progress. Please refresh.', 'info');
-        }
-        
-        renderHome();
+        fetchDiscover();
         renderExplore();
         renderFavorites();
         renderRecent();
-        
-        // Hide auth if already logged in
-        if (currentUser) {
-            authOverlay.style.display = 'none';
-        }
     } catch (error) {
-        console.error('Channel Fetch ERROR:', error);
-        if (retryCount < 2) {
-             setTimeout(() => fetchChannels(retryCount + 1), 5000);
-             return;
-        }
-        showToast('Connection unstable. Retrying...', 'error');
+        console.error('Movie Fetch ERROR:', error);
+        showToast('Server Unreachable', 'error');
+    }
+}
+
+async function fetchDiscover() {
+    try {
+        const res = await fetch('/api/discover');
+        trendingMovies = await res.json();
+        renderHome();
+    } catch (e) {
+        console.error(e);
+        renderHome();
     }
 }
 
@@ -218,6 +209,7 @@ function backToEmail() {
 
 function updateUIWithUser() {
     if (!currentUser) return;
+    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUser.name}`;
     document.getElementById('user-name-display').innerText = currentUser.name;
     document.getElementById('user-bio-display').innerText = currentUser.bio || "TV Enthusiast";
     document.getElementById('user-age-display').innerText = `Age: ${currentUser.age || 'Not set'}`;
@@ -277,192 +269,97 @@ function changeAvatar() {
 // --- RENDERING ---
 
 function renderHome() {
-    const container = document.getElementById('category-rows');
-    if (!container || !channels.length) return;
-    container.innerHTML = '';
+    const grid = document.getElementById('featured-grid');
+    const movieGrid = document.getElementById('trending-movies-grid');
+    if (!grid || !movieGrid) return;
     
-    // 1. Recently Watched
-    renderRecent(); // This now updates #recent-section
-
-    // 2. Intelligent Categorization
-    const categoryMap = {
-        'News': ['News', 'Local News', 'Live News', 'Hindi News', 'English News'],
-        'Movies': ['Movies', 'Cinema', 'Hindi Movies', 'English Movies', 'South Movies'],
-        'Sports': ['Sports', 'Cricket', 'Live Sports'],
-        'Music': ['Music', 'Bollywood Music', 'Classical Music'],
-        'Entertainment': ['Entertainment', 'GEC', 'Series', 'General'],
-        'Kids': ['Kids', 'Animation', 'Cartoon'],
-        'Religious': ['Religious', 'Spiritual', 'Devotional']
-    };
-
-    const categories = {};
-    channels.forEach(ch => {
-        let group = ch.group || 'General';
-        // Normalize group
-        for (const [key, aliases] of Object.entries(categoryMap)) {
-            if (aliases.some(a => group.includes(a))) {
-                group = key;
-                break;
-            }
-        }
-        if (!categories[group]) categories[group] = [];
-        categories[group].push(ch);
-    });
-
-    // Priority Order for categories
-    const priority = ['News', 'Movies', 'Sports', 'Entertainment', 'Music', 'Kids', 'Religious'];
+    grid.innerHTML = '';
+    movieGrid.innerHTML = '';
     
-    // Sort & Render
-    [...priority, ...Object.keys(categories).filter(k => !priority.includes(k))]
-        .filter(cat => categories[cat] && categories[cat].length > 0)
-        .slice(0, 10)
-        .forEach(catName => {
-            container.appendChild(createCategoryRow(catName, categories[catName].slice(0, 30)));
-        });
-}
-
-function createCategoryRow(title, itemArray) {
-    const row = document.createElement('div');
-    row.className = 'space-y-6';
-    row.innerHTML = `
-        <div class="flex items-center justify-between px-1">
-            <h3 class="text-xl font-black text-white/90 tracking-tight">${title}</h3>
-            <span onclick="switchPage('explore')" class="text-[10px] text-blue-500 font-bold uppercase tracking-[3px] cursor-pointer hover:underline">View All</span>
-        </div>
-        <div class="flex space-x-6 overflow-x-auto pb-4 no-scrollbar snap-x snap-mandatory" id="row-${title.replace(/\s+/g, '-')}">
-            <!-- Items added via JS for safety -->
-        </div>
-    `;
+    const items = trendingMovies.length ? trendingMovies : movies.slice(0, 12);
     
-    const slider = row.querySelector('.no-scrollbar');
-    itemArray.forEach(ch => {
-        const item = document.createElement('div');
-        item.className = 'min-w-[280px] sm:min-w-[340px] snap-start py-4';
-        item.onclick = () => openPlayer(ch);
-        item.innerHTML = `
-            <div class="channel-card glass border-white/[0.03] group p-6 hover:border-indigo-500/30">
-                <div class="flex items-center space-x-6 relative z-10">
-                    <div class="w-20 h-20 rounded-[28px] bg-white/[0.03] p-4 flex items-center justify-center border border-white/5 group-hover:border-indigo-500/20 group-hover:bg-white/[0.05] transition-all duration-500 shadow-xl">
-                        <img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.src='/static/icon-192.png'">
-                    </div>
-                    <div class="flex-grow min-w-0">
-                        <p class="text-[9px] text-indigo-400 font-black uppercase tracking-[3px] mb-1.5">${ch.group}</p>
-                        <h4 class="text-white font-black text-lg truncate tracking-tight group-hover:text-indigo-100 transition-colors uppercase italic">${ch.name}</h4>
-                    </div>
-                </div>
-                <div class="absolute right-6 bottom-6 w-12 h-12 rounded-2xl mx-gradient flex items-center justify-center shadow-lg transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-                    <i data-lucide="play" class="w-6 h-6 text-white fill-white ml-1"></i>
+    items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'group relative aspect-[2/3] rounded-[32px] overflow-hidden glass hover:scale-[1.02] active:scale-95 transition-all duration-500 cursor-pointer shadow-2xl';
+            
+        card.innerHTML = `
+            <img src="${item.logo}" class="absolute inset-0 w-full h-full object-cover" onerror="this.src='/static/icon-192.png'">
+            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-100 group-hover:via-black/40 transition-all duration-500"></div>
+            <div class="absolute bottom-6 left-6 right-6 translate-y-2 group-hover:translate-y-0 transition-all duration-500">
+                <p class="text-[10px] text-blue-400 font-bold uppercase tracking-[4px] mb-2">${item.genres[0] || 'Movie'}</p>
+                <h4 class="font-black text-xl leading-tight truncate px-0.5">${item.name}</h4>
+                <div class="flex items-center space-x-2 mt-2">
+                    <span class="px-3 py-1 bg-white/10 backdrop-blur text-[10px] font-black rounded-lg">${item.year} &bull; ${item.rating}</span>
                 </div>
             </div>
         `;
-        slider.appendChild(item);
+        card.onclick = () => openPlayer(item);
+        grid.appendChild(card);
     });
-    
-    lucide.createIcons({ scope: row });
-    return row;
+
+    if (movies.length) {
+        movies.slice(0, 20).forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'flex-shrink-0 w-44 rounded-[32px] glass p-1 aspect-[2/3] group relative overflow-hidden active:scale-95 transition-all duration-300 cursor-pointer shadow-xl border border-white/5';
+            card.innerHTML = `
+                <img src="${m.logo}" class="absolute inset-0 w-full h-full object-cover rounded-[32px]">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                <div class="absolute bottom-4 left-4 right-4">
+                    <h4 class="font-bold text-[10px] truncate w-32 uppercase tracking-tighter">${m.name}</h4>
+                </div>
+            `;
+            card.onclick = () => openPlayer(m);
+            movieGrid.appendChild(card);
+        });
+    }
+    lucide.createIcons();
 }
 
-function renderExplore(list = channels) {
+function renderExplore(list = movies) {
     const listContainer = document.getElementById('all-channels-list');
     if (!listContainer) return;
     
     listContainer.innerHTML = '';
-    // Show ALL channels in Explore
-    list.forEach(c => {
+    list.forEach(m => {
         const item = document.createElement('div');
-        item.className = 'glass p-6 rounded-[32px] flex items-center space-x-5 shadow-lg hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer border border-white/[0.03] group relative overflow-hidden';
+        item.className = 'glass p-2 rounded-[32px] flex items-center space-x-4 shadow hover:bg-white/5 transition active:scale-95 cursor-pointer border border-white/5 relative group';
         item.innerHTML = `
-            <div class="relative w-14 h-14 flex-shrink-0">
-                <img src="${c.logo}" class="w-full h-full rounded-[20px] object-contain bg-white/5 border border-white/5 shadow-inner" onerror="this.src='/static/icon-192.png'">
-                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-black rounded-full shadow-lg"></div>
+            <div class="relative w-20 h-28 flex-shrink-0">
+                <img src="${m.logo}" class="w-full h-full rounded-2xl object-cover bg-white/5 shadow-lg" onerror="this.src='/static/icon-192.png'">
             </div>
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-black text-md truncate uppercase tracking-tight text-white/90 group-hover:text-indigo-300 transition-colors">${c.name}</span>
-                <span class="text-[10px] text-indigo-400/60 font-black uppercase tracking-[3px] mt-1">${c.group}</span>
+                <span class="font-black text-lg truncate uppercase tracking-tight text-white/90">${m.name}</span>
+                <span class="text-[10px] text-white/40 font-bold uppercase tracking-[2px] mt-0.5">${m.genres.join(', ')}</span>
+                <span class="text-blue-500 font-bold text-xs mt-2 italic">${m.year} &bull; Rating: ${m.rating}</span>
             </div>
-            <div class="flex items-center space-x-3">
-                <button onclick="event.stopPropagation(); toggleFavorite(event, '${c.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-2xl border-white/5 hover:border-red-500/20 transition-all">
-                    <i data-lucide="heart" class="w-4 h-4 ${isFavorite(c.name) ? 'fill-red-500 text-red-500' : 'text-white/20'}"></i>
+            <div class="pr-6">
+                <button onclick="event.stopPropagation(); toggleFavorite(event, '${m.name.replace(/'/g, "\\'")}')" class="p-3 glass rounded-full">
+                    <i data-lucide="heart" class="w-5 h-5 ${isFavorite(m.name) ? 'fill-red-500 text-red-500' : ''}"></i>
                 </button>
-                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover:bg-indigo-500 group-hover:border-transparent transition-all shadow-indigo-500/20 group-hover:shadow-lg">
-                    <i data-lucide="play" class="w-5 h-5 text-indigo-400 fill-indigo-400 group-hover:text-white group-hover:fill-white transition-all ml-1"></i>
-                </div>
             </div>
         `;
-        item.onclick = () => openPlayer(c);
+        item.onclick = () => openPlayer(m);
         listContainer.appendChild(item);
     });
     lucide.createIcons();
 }
 
-// --- PLAYER LOGIC ---
-
-function openPlayer(channel) {
-    if (!channel || !channel.url) {
-        showToast("Stream URL not found", "error");
-        return;
-    }
-    
-    // Fix: Add a CORS Proxy for public m3u8 links that often block referrers
-    const finalUrl = `https://corsproxy.io/?${encodeURIComponent(channel.url)}`;
-    
+function openPlayer(movie) {
+    // For a YTS site, we show details since direct streaming is complex
+    showToast(`Streaming ${movie.name}...`, 'info');
     playerView.style.display = 'block';
-    playerLoader.classList.remove('hidden');
-    document.getElementById('player-channel-name').textContent = channel.name;
+    document.getElementById('player-channel-name').textContent = movie.name;
     
-    // Feature: Add to Recent
-    addToRecent(channel);
-
-    const playStream = () => {
-        console.log("Stream successfully parsed and starting playback");
-        playerLoader.classList.add('hidden');
-        video.play().catch(e => {
-            console.warn("Autoplay blocked or failed:", e);
-            updatePlayIcon(false);
-        });
-        updatePlayIcon(true);
-    };
-
-    if (Hls.isSupported()) {
-        console.log("Initializing HLS for:", finalUrl);
-        if (hls) hls.destroy();
-        hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 60
-        });
-        hls.loadSource(finalUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, playStream);
-        hls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) {
-                console.error("HLS Fatal Error:", data);
-                playerLoader.classList.add('hidden');
-                showToast("Stream Error: Verify Connection", "error");
-                switch(data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                        hls.startLoad();
-                        break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                        hls.recoverMediaError();
-                        break;
-                    default:
-                        hls.destroy();
-                        break;
-                }
-            }
-        });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = finalUrl;
-        video.onloadedmetadata = playStream;
-        video.onerror = () => {
-            playerLoader.classList.add('hidden');
-            showToast("Native Player Error", "error");
-        };
-    } else {
-        playerLoader.classList.add('hidden');
-        showToast("Your browser does not support HLS", "error");
-    }
+    // We could potentially use a peer-to-peer or third party player here
+    // But for this GUI task, we just show a backdrop and info
+    video.poster = movie.image;
+    video.src = '';
+    
+    const controls = document.getElementById('controls');
+    // Hide seeker for now as it's a showcase
+    showToast("Press Play to watch Trailer (Simulated)", "info");
+    
+    addToRecent(movie);
     resetControlsTimer();
 }
 
@@ -574,29 +471,29 @@ globalSearch.oninput = (e) => {
     const q = e.target.value.toLowerCase();
     if (!q) { searchResults.innerHTML = ''; return; }
     
-    const res = channels.filter(c => c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 30);
+    const res = movies.filter(m => m.name.toLowerCase().includes(q) || m.genres.some(g => g.toLowerCase().includes(q))).slice(0, 30);
     searchResults.innerHTML = '';
-    res.forEach(c => {
+    res.forEach(m => {
         const item = document.createElement('div');
         item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4 active:scale-95 transition';
         item.innerHTML = `
-            <img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
+            <img src="${m.logo}" class="w-12 h-16 rounded-lg object-cover bg-white/5" onerror="this.src='/static/icon-192.png'">
             <div class="flex flex-col min-w-0 flex-grow">
-                <span class="font-bold text-base truncate">${c.name}</span>
-                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">${c.group}</span>
+                <span class="font-bold text-base truncate">${m.name}</span>
+                <span class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">${m.year}</span>
             </div>
             <div class="p-3"><i data-lucide="play" class="w-5 h-5 text-white/20"></i></div>
         `;
-        item.onclick = () => { openPlayer(c); toggleSearch(); };
+        item.onclick = () => { openPlayer(m); toggleSearch(); };
         searchResults.appendChild(item);
     });
     lucide.createIcons();
 };
 
-function filterByGroup(group) {
-    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent.includes(group)));
+function filterByGroup(genre) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent.includes(genre)));
     switchPage('explore');
-    renderExplore(group === 'All' ? channels : channels.filter(c => c.group.includes(group) || c.name.includes(group)));
+    renderExplore(genre === 'All' ? movies : movies.filter(m => m.genres.includes(genre)));
 }
 
 // --- FAVORITES ---
@@ -614,13 +511,13 @@ function isFavorite(name) { return (JSON.parse(localStorage.getItem('favs') || '
 
 function renderFavorites() {
     const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-    const list = channels.filter(c => favs.includes(c.name));
-    favoritesList.innerHTML = list.length === 0 ? '<p class="text-center py-20 opacity-20">Empty Library</p>' : '';
-    list.forEach(c => {
+    const list = movies.filter(m => favs.includes(m.name));
+    favoritesList.innerHTML = list.length === 0 ? '<p class="text-center py-20 opacity-20">Empty Movies Library</p>' : '';
+    list.forEach(m => {
         const item = document.createElement('div');
         item.className = 'glass p-5 rounded-[28px] flex items-center space-x-4';
-        item.innerHTML = `<img src="${c.logo}" class="w-12 h-12 rounded-2xl object-cover"><div class="flex-grow font-bold">${c.name}</div><i data-lucide="heart" class="fill-red-500 text-red-500 w-5 h-5"></i>`;
-        item.onclick = () => openPlayer(c);
+        item.innerHTML = `<img src="${m.logo}" class="w-12 h-16 rounded-lg object-cover"><div class="flex-grow font-bold">${m.name}</div><i data-lucide="heart" class="fill-red-500 text-red-500 w-5 h-5"></i>`;
+        item.onclick = () => openPlayer(m);
         favoritesList.appendChild(item);
     });
     lucide.createIcons();
@@ -629,21 +526,16 @@ function renderFavorites() {
 // --- NEW FEATURES ---
 
 function addToRecent(channel) {
-    let recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
-    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 8);
-    localStorage.setItem('recent_channels', JSON.stringify(recents));
+    let recents = JSON.parse(localStorage.getItem('recents') || '[]');
+    recents = [channel, ...recents.filter(c => c.url !== channel.url)].slice(0, 5);
+    localStorage.setItem('recents', JSON.stringify(recents));
     renderRecent();
-    // Also re-render home to keep it synced
-    renderHome();
 }
 
 function renderRecent() {
     const section = document.getElementById('recent-section');
     const scroll = document.getElementById('recent-scroll');
-    if (!section || !scroll) return;
-    
-    // Use 'recent_channels' consistently with renderHome
-    const recents = JSON.parse(localStorage.getItem('recent_channels') || '[]');
+    const recents = JSON.parse(localStorage.getItem('recents') || '[]');
     
     if (recents.length === 0) {
         section.classList.add('hidden');
@@ -651,21 +543,14 @@ function renderRecent() {
     }
     
     section.classList.remove('hidden');
-    scroll.innerHTML = '';
-    
-    recents.forEach((c, idx) => {
-        const item = document.createElement('div');
-        item.className = 'flex-shrink-0 w-24 text-center space-y-3 cursor-pointer group';
-        item.innerHTML = `
-            <div class="w-20 h-20 rounded-[28px] glass p-1 mx-auto overflow-hidden relative border-white/5 group-hover:border-indigo-500/40 group-hover:scale-105 transition-all duration-500 active:scale-95 shadow-xl">
-                <img src="${c.logo}" class="w-full h-full object-contain rounded-[24px] bg-white/[0.02]" onerror="this.src='/static/icon-192.png'">
-                <div class="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+    scroll.innerHTML = recents.map(c => `
+        <div onclick='openPlayer(${JSON.stringify(c)})' class="flex-shrink-0 w-20 text-center space-y-2">
+            <div class="w-16 h-16 rounded-2xl glass p-1 mx-auto overflow-hidden">
+                <img src="${c.logo}" class="w-full h-full object-cover rounded-xl" onerror="this.src='/static/icon-192.png'">
             </div>
-            <p class="text-[10px] font-black uppercase italic tracking-tighter text-white/40 group-hover:text-white transition-colors px-1 truncate">${c.name}</p>
-        `;
-        item.onclick = () => openPlayer(c);
-        scroll.appendChild(item);
-    });
+            <p class="text-[10px] font-bold truncate opacity-60">${c.name}</p>
+        </div>
+    `).join('');
 }
 
 function copyShareLink() {
@@ -695,12 +580,10 @@ function showToast(msg, type='info') {
     const t = document.getElementById('global-toast');
     t.innerText = msg;
     t.style.opacity = '1';
-    t.style.top = '12%';
-    t.style.transform = 'translateX(-50%) translateY(0)';
+    t.style.top = '10%';
     setTimeout(() => {
         t.style.opacity = '0';
-        t.style.top = '10%';
-        t.style.transform = 'translateX(-50%) translateY(-10px)';
+        t.style.top = '8%';
     }, 3000);
 }
 
@@ -735,7 +618,7 @@ async function init() {
         authOverlay.style.display = 'none';
         switchPage('home');
         updateUIWithUser();
-        fetchChannels();
+        fetchMovies();
     }
     
     // Add keyboard support for forms

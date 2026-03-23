@@ -7,7 +7,6 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import time
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -40,7 +39,6 @@ else:
 # Define collections safely
 users_col = db['users'] if db is not None else None
 otps_col = db['otps'] if db is not None else None
-channels_col = db['channels'] if db is not None else None
 
 # Email Setup Variables from Env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -48,54 +46,26 @@ MAIL_PASSWORD = "".join(os.getenv("MAIL_PASSWORD", "").split())
 MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 
-PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/in.m3u"
-CHANNELS_CACHE = []
-CACHE_TIME = 0
+# Movie API Source
+MOVIE_API_URL = "https://yts.mx/api/v2/list_movies.json"
 
-# Helper: Parse M3U
-def parse_m3u(file_content):
-    channels = []
-    lines = file_content.splitlines()
-    current = {}
-    
-    for line in lines:
-        line = line.strip()
-        if not line: continue
-        
-        if line.startswith("#EXTINF:"):
-            # Robust parsing for logo and group
-            current = {"logo": "", "group": "General", "name": "Unnamed", "headers": {}}
-            
-            # Extract attributes using regex
-            logo_match = re.search(r'tvg-logo="([^"]+)"', line)
-            if logo_match: current["logo"] = logo_match.group(1)
-            
-            group_match = re.search(r'group-title="([^"]+)"', line)
-            if group_match: current["group"] = group_match.group(1).split(';')[0].strip()
-            
-            # Name is always after the last comma
-            parts = line.split(',')
-            if len(parts) > 1:
-                current["name"] = parts[-1].strip()
-        
-        elif line.startswith("#EXTVLCOPT:"):
-            # Handle user-agent and referer options
-            ua_match = re.search(r'http-user-agent=([^ ]+)', line)
-            if ua_match and current:
-                current["headers"]["User-Agent"] = ua_match.group(1)
-            ref_match = re.search(r'http-referrer=([^ ]+)', line)
-            if ref_match and current:
-                current["headers"]["Referer"] = ref_match.group(1)
-                
-        elif line.startswith("http") and current:
-            # Include both HTTP and HTTPS streams. 
-            # HTTP streams will be proxied via HTTPS in the frontend to avoid mixed content.
-            current["url"] = line
-            if current["name"] != "Unnamed":
-                channels.append(current)
-            current = {}
-            
-    return channels
+# Helper: Filter Movies
+def clean_movie_data(movie_list):
+    cleaned = []
+    for m in movie_list:
+        cleaned.append({
+            "id": m.get("id"),
+            "name": m.get("title_english") or m.get("title"),
+            "logo": m.get("large_cover_image") or m.get("medium_cover_image"),
+            "image": m.get("background_image_original") or m.get("large_cover_image"),
+            "rating": m.get("rating", "N/A"),
+            "year": m.get("year"),
+            "genres": m.get("genres", ["Movie"]),
+            "summary": m.get("summary", "No description available."),
+            "url": m.get("url"), # Link to YTS for details
+            "type": "movie"
+        })
+    return cleaned
 
 # --- AUTH ROUTES ---
 
@@ -224,55 +194,37 @@ def index():
 def favicon():
     return app.send_static_file('icon-192.png')
 
-@app.route('/api/channels')
-def get_channels():
-    global CHANNELS_CACHE, CACHE_TIME
+@app.route('/api/movies')
+def get_movies():
     try:
-        now = time.time()
+        limit = request.args.get('limit', 24)
+        page = request.args.get('page', 1)
+        sort = request.args.get('sort', 'download_count')
         
-        # 1. Check local global cache (fastest)
-        if CHANNELS_CACHE and (now - CACHE_TIME < 300): # 5 mins locally
-            return jsonify(CHANNELS_CACHE)
-
-        # 2. Check MongoDB cache (persistent across Vercel cold starts)
-        if channels_col is not None:
-            cache_doc = channels_col.find_one({"_id": "cache"})
-            if cache_doc:
-                last_update = cache_doc.get('time', 0)
-                # If cache is valid (less than 1 hour old)
-                if (now - last_update < 3600) and cache_doc.get('data'):
-                    CHANNELS_CACHE = cache_doc['data']
-                    CACHE_TIME = last_update
-                    return jsonify(CHANNELS_CACHE)
+        query_url = f"{MOVIE_API_URL}?limit={limit}&page={page}&sort_by={sort}"
+        response = requests.get(query_url, timeout=15)
         
-        # 3. If no cache or cache expired, fetch from source
-        print("Fetching fresh channels from source...")
-        response = requests.get(PLAYLIST_URL, timeout=15)
         if not response.ok:
-             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-             return jsonify([{"name": "Server Maintenance", "group": "System", "url": "", "logo": ""}])
+            return jsonify({"error": "Movie provider error"}), 502
             
-        parsed = parse_m3u(response.text)
-        if not parsed:
-             if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-             return jsonify([{"name": "Unavailable", "group": "System", "url": "", "logo": ""}])
-             
-        CHANNELS_CACHE = parsed[:1000]
-        CACHE_TIME = now
-        
-        # Update MongoDB for next cold start
-        if channels_col is not None:
-            channels_col.update_one(
-                {"_id": "cache"}, 
-                {"$set": {"data": CHANNELS_CACHE, "time": CACHE_TIME}}, 
-                upsert=True
-            )
-            
-        return jsonify(CHANNELS_CACHE)
+        data = response.json()
+        movies = data.get("data", {}).get("movies", [])
+        return jsonify(clean_movie_data(movies))
     except Exception as e:
         print(f"FETCH ERROR: {e}")
-        if CHANNELS_CACHE: return jsonify(CHANNELS_CACHE)
-        return jsonify({"error": "Gateway Timeout. Please reload app."}), 500
+        return jsonify({"error": f"Failed to load movies: {str(e)}"}), 500
+
+@app.route('/api/discover')
+def get_discover():
+    try:
+        # Use popular movies as discover content
+        response = requests.get(f"{MOVIE_API_URL}?limit=12&sort_by=rating", timeout=10)
+        data = response.json()
+        movies = data.get("data", {}).get("movies", [])
+        return jsonify(clean_movie_data(movies))
+    except Exception as e:
+        print(f"DISCOVER ERROR: {e}")
+        return jsonify([])
 
 @app.route('/service-worker.js')
 def sw():
